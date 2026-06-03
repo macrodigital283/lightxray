@@ -35,6 +35,18 @@ CREATE INDEX IF NOT EXISTS users_last_online_idx ON users (last_online);
 CREATE INDEX IF NOT EXISTS users_enable_idx      ON users (enable);
 CREATE INDEX IF NOT EXISTS users_serial_idx      ON users (serial_id);
 
+-- CDN-fronted hostnames the subscription bundle emits one vless URL
+-- per. Operators add/remove these via the dashboard; the LX_CDN_HOSTS
+-- env var (if set) seeds the table on first startup but isn't the
+-- source of truth at runtime.
+CREATE TABLE IF NOT EXISTS cdn_hosts (
+    id         BIGSERIAL    PRIMARY KEY,
+    hostname   TEXT         UNIQUE NOT NULL,
+    enabled    BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cdn_hosts_enabled_idx ON cdn_hosts (enabled);
+
 -- xray's StatsService counters are monotonic from process start. To compute
 -- a delta across an xray restart we persist the last value we observed; if
 -- the next read is LOWER, we treat the delta as new (the counter reset).

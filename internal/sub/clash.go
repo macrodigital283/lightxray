@@ -14,9 +14,8 @@ import (
 // edge. Self-contained — many Clash Meta clients (Clash Verge Rev,
 // FlClash, Stash) treat a subscription as the *complete* profile and
 // won't fill in sensible defaults for the top-level options.
-func BuildClashMeta(cfg config.Config, userUUID, displayName string) string {
+func BuildClashMeta(cfg config.Config, hosts []string, userUUID, displayName string) string {
 	name := safeName(displayName, "lightxray")
-	hosts := cfg.CDNHosts
 	if len(hosts) == 0 {
 		hosts = []string{cfg.PublicHost}
 	}

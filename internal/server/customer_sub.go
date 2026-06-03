@@ -22,7 +22,8 @@ func (d Deps) customerSub(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	body := sub.Build(d.cfg, u.UUID.String(), u.Name)
+	hosts := d.lookupCDNHosts(r)
+	body := sub.Build(d.cfg, hosts, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -41,8 +42,9 @@ func (d Deps) customerAuto(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	hosts := d.lookupCDNHosts(r)
 	if isClashUA(r.Header.Get("User-Agent")) {
-		body := sub.BuildClashMeta(d.cfg, u.UUID.String(), u.Name)
+		body := sub.BuildClashMeta(d.cfg, hosts, u.UUID.String(), u.Name)
 		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 		w.Header().Set("Profile-Update-Interval", "12")
 		w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -50,7 +52,7 @@ func (d Deps) customerAuto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// default = V2Ray base64
-	body := sub.Build(d.cfg, u.UUID.String(), u.Name)
+	body := sub.Build(d.cfg, hosts, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -84,11 +86,23 @@ func (d Deps) customerClashMeta(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	body := sub.BuildClashMeta(d.cfg, u.UUID.String(), u.Name)
+	hosts := d.lookupCDNHosts(r)
+	body := sub.BuildClashMeta(d.cfg, hosts, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
 	_, _ = w.Write([]byte(body))
+}
+
+// lookupCDNHosts fetches the enabled CDN hostnames from the DB. A
+// failed lookup falls back to an empty slice — sub.Build then uses
+// PublicHost as the single edge. Never returns an error to the
+// caller; CDN config is best-effort vs. the user-impacting handler.
+func (d Deps) lookupCDNHosts(r *http.Request) []string {
+	ctx, cancel := reqCtx(r)
+	defer cancel()
+	hosts, _ := d.store.ListEnabledCDNHostnames(ctx)
+	return hosts
 }
 
 // subLookup centralises the auth/404 logic shared by every customer

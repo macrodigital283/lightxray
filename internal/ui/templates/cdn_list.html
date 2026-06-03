@@ -1,0 +1,68 @@
+{{define "cdn_list"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>cdn hosts — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    <h1>CDN hosts <span class="badge">{{.Count}}</span></h1>
+    <p class="dim">
+      Each enabled hostname here becomes one VLESS server in every user's
+      subscription bundle. Disabled rows still resolve in DNS but won't
+      appear in new sub fetches.
+    </p>
+
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+
+    <section class="card">
+      <h2>Add hostname</h2>
+      <form method="post" action="{{.Prefix}}/ui/cdn/" class="row-form">
+        <input name="hostname" placeholder="cdn1.example.com" autofocus required
+               spellcheck="false" autocomplete="off">
+        <button type="submit">Add</button>
+      </form>
+      <p class="dim" style="margin-top:8px;font-size:12.5px">
+        DNS A record for this name should point at the box (CDN orange-cloud OK);
+        CDN SSL mode must be "Full" so it talks HTTPS to the origin.
+      </p>
+    </section>
+
+    {{if not .Hosts}}
+      <p class="empty">No CDN hosts yet. The bundle will use the management host
+        (<code>{{.Host}}</code>) as the only edge.</p>
+    {{else}}
+      <table class="users">
+        <thead>
+          <tr>
+            <th>Hostname</th>
+            <th>State</th>
+            <th>Added</th>
+            <th class="dim">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Hosts}}
+            <tr class="{{if not .Enabled}}disabled{{end}}">
+              <td><code>{{.Hostname}}</code></td>
+              <td>{{if .Enabled}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}</td>
+              <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+              <td>
+                <form method="post" action="{{$.Prefix}}/ui/cdn/{{.ID}}/toggle" class="inline">
+                  <button type="submit" class="link">{{if .Enabled}}disable{{else}}enable{{end}}</button>
+                </form>
+                <form method="post" action="{{$.Prefix}}/ui/cdn/{{.ID}}/delete" class="inline"
+                      onsubmit="return confirm('Remove {{.Hostname}} from the CDN pool?');">
+                  <button type="submit" class="link danger-link">delete</button>
+                </form>
+              </td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}

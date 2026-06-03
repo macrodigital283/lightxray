@@ -64,6 +64,12 @@ func (u *UI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /ui/users/{uuid}/delete", u.requireAuth(u.usersDelete))
 	mux.HandleFunc("POST /ui/users/{uuid}/toggle", u.requireAuth(u.usersToggle))
 
+	// CDN host pool — operator-managed via the dashboard.
+	mux.HandleFunc("GET /ui/cdn/", u.requireAuth(u.cdnList))
+	mux.HandleFunc("POST /ui/cdn/", u.requireAuth(u.cdnAdd))
+	mux.HandleFunc("POST /ui/cdn/{id}/toggle", u.requireAuth(u.cdnToggle))
+	mux.HandleFunc("POST /ui/cdn/{id}/delete", u.requireAuth(u.cdnDelete))
+
 	// Static — single CSS file. http.FileServer serves the whole subdir
 	// so adding e.g. favicon.ico later just drops in.
 	staticSub, err := fs.Sub(staticFS, "static")

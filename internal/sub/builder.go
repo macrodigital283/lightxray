@@ -14,14 +14,15 @@ import (
 
 // Build returns the base64 bundle a customer's V2Ray client will pull
 // from `/<client_proxy_path>/<uuid>/sub/`. Emits one vless:// URL per
-// CDN host in cfg.CDNHosts; if that list is empty, falls back to
-// PublicHost only (single-server / no-CDN mode).
+// host in `hosts`; if `hosts` is empty, falls back to PublicHost only
+// (single-server / no-CDN mode).
 //
 // All URLs share UUID + WS path; only server/sni/Host differ. Clients
-// (v2rayN, v2rayNG, Streisand) treat each as a separate server and the
-// user picks the fastest.
-func Build(cfg config.Config, userUUID, displayName string) string {
-	hosts := cfg.CDNHosts
+// (v2rayN, v2rayNG, Streisand) treat each as a separate server and
+// the user picks the fastest. `hosts` comes from the cdn_hosts table
+// at request time — the caller is responsible for the DB lookup so
+// this stays a pure function.
+func Build(cfg config.Config, hosts []string, userUUID, displayName string) string {
 	if len(hosts) == 0 {
 		hosts = []string{cfg.PublicHost}
 	}
@@ -33,11 +34,10 @@ func Build(cfg config.Config, userUUID, displayName string) string {
 	return base64.StdEncoding.EncodeToString([]byte(bundle))
 }
 
-// BuildPlain is Build without the base64 wrapping — used by the UI
-// "Show decoded VLESS link" disclosure so operators can copy one URL
-// at a time.
-func BuildPlain(cfg config.Config, userUUID, displayName string) string {
-	hosts := cfg.CDNHosts
+// BuildPlain is Build without the base64 wrapping — for the UI
+// "Show decoded VLESS link" disclosure where each URL can be copied
+// individually.
+func BuildPlain(cfg config.Config, hosts []string, userUUID, displayName string) string {
 	if len(hosts) == 0 {
 		hosts = []string{cfg.PublicHost}
 	}

@@ -203,6 +203,10 @@ button, .cancel {
 }
 button:hover { filter: brightness(1.1); }
 button.danger { background: var(--bad); color: white; }
+button.link.danger-link { color: var(--bad); }
+button.link.danger-link:hover { color: #ff7a73; }
+form.row-form { display: flex; gap: 8px; }
+form.row-form input { flex: 1; }
 .cancel { background: var(--panel-2); color: var(--fg); display: inline-block; }
 .cancel:hover { text-decoration: none; background: var(--line); }
 .actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }

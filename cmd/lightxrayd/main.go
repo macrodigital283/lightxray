@@ -51,6 +51,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Seed cdn_hosts from LX_CDN_HOSTS env var (idempotent — AddCDNHost
+	// uses ON CONFLICT). After the first run the dashboard is the
+	// source of truth; the env var can stay set or be removed without
+	// affecting behaviour.
+	for _, h := range cfg.CDNHosts {
+		if _, err := store.AddCDNHost(ctx, h); err != nil {
+			slog.Warn("cdn seed: insert", "host", h, "err", err)
+		}
+	}
+
 	// --- xray gRPC --------------------------------------------------------
 	// Keep retrying — xray may still be coming up when systemd starts us.
 	xc, err := xray.DialWithRetry(ctx, cfg.XrayGRPCAddr, cfg.XrayInboundTag, 30*time.Second)

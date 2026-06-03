@@ -150,16 +150,12 @@ func (u *UI) usersDetail(w http.ResponseWriter, r *http.Request) {
 		"/" + user.UUID.String()
 	frag := "#" + url.PathEscape(user.Name)
 
-	// Decoded VLESS line for clients that accept the raw URI directly.
-	vlessLink := ""
-	if decoded, err := base64.StdEncoding.DecodeString(sub.Build(u.cfg, user.UUID.String(), user.Name)); err == nil {
-		// Build() appends a trailing newline before encoding — trim it.
-		s := string(decoded)
-		for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
-			s = s[:len(s)-1]
-		}
-		vlessLink = s
-	}
+	// Pull the current CDN hosts so the decoded VLESS preview reflects
+	// what subscribers will actually receive. Failures fall back to the
+	// no-CDN single-server bundle.
+	hosts, _ := u.store.ListEnabledCDNHostnames(r.Context())
+	vlessLink := sub.BuildPlain(u.cfg, hosts, user.UUID.String(), user.Name)
+	_ = base64.StdEncoding // kept for future use; encoding helper retained for legacy callers
 
 	u.render(w, "users_detail", map[string]any{
 		"User":         user,
