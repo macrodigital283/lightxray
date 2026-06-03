@@ -72,9 +72,23 @@ func (r *Reconciler) tick(ctx context.Context) {
 	)
 	now := time.Now().UTC()
 
+	var ghosts int
 	for uidStr, vals := range traffic {
 		uid, err := uuid.Parse(uidStr)
 		if err != nil {
+			continue
+		}
+		// xray retains StatsService entries for deleted users (its stats
+		// namespace doesn't auto-GC). Skip any UUID we no longer have a
+		// row for — otherwise we count ghost traffic as `online`, churn
+		// pointless UPDATEs, and trip the stats_cursor FK on insert.
+		ok, err := r.store.UserExists(tctx, uid)
+		if err != nil {
+			slog.Warn("reconciler: user exists", "uuid", uid, "err", err)
+			continue
+		}
+		if !ok {
+			ghosts++
 			continue
 		}
 		curUp, curDown := vals[0], vals[1]
@@ -118,6 +132,7 @@ func (r *Reconciler) tick(ctx context.Context) {
 	slog.Info("reconciler tick",
 		"users", updated,
 		"online", online,
+		"ghosts", ghosts,
 		"delta_up_bytes", totalDeltaUp,
 		"delta_down_bytes", totalDeltaDown,
 		"took", time.Since(start),

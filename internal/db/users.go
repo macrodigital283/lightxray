@@ -257,6 +257,18 @@ func (s *Store) CountEnabledUsers(ctx context.Context) (int64, error) {
 	return n, err
 }
 
+// UserExists is a cheap presence check used by the reconciler to skip
+// UUIDs xray still has stats for but we've deleted from the DB. Without
+// this, deleted-user ghosts would inflate the `online` count and emit
+// pointless UPDATE/UPSERT churn.
+func (s *Store) UserExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	var exists bool
+	err := s.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE uuid = $1)`, id,
+	).Scan(&exists)
+	return exists, err
+}
+
 // AllUUIDsEnabled returns the uuids of all enabled users — used by xray
 // hydrate-from-DB on startup, and by the reconciler for stats queries.
 func (s *Store) AllUUIDsEnabled(ctx context.Context) ([]uuid.UUID, error) {
