@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,16 @@ type Config struct {
 	VLESSFlow   string // optional
 	VLESSAlpn   string // optional
 	SubName     string // friendly name in vless:// fragment
+
+	// CDNHosts is the list of CDN-fronted domains the subscription
+	// bundle emits one VLESS URL per. Operators front lightxray behind
+	// (e.g.) Cloudflare on multiple hostnames; the management API + sub
+	// fetch stays on PublicHost (grey-cloud, no proxy) but the actual
+	// WS data plane is reachable via these proxied hostnames. Each URL
+	// in the bundle uses the same UUID + path; only server/sni/Host
+	// changes. If empty, the bundle just contains PublicHost — the
+	// no-CDN single-server fallback.
+	CDNHosts []string
 }
 
 // Load reads all LX_* env vars, applies defaults, and validates required
@@ -54,6 +65,7 @@ func Load() (Config, error) {
 		VLESSFlow:       os.Getenv("LX_VLESS_FLOW"),
 		VLESSAlpn:       os.Getenv("LX_VLESS_ALPN"),
 		SubName:         getenv("LX_SUB_NAME", "lightxray"),
+		CDNHosts:        splitCSV(os.Getenv("LX_CDN_HOSTS")),
 	}
 	if c.VLESSSNI == "" {
 		c.VLESSSNI = c.PublicHost
@@ -119,4 +131,22 @@ func trimSlashes(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// splitCSV trims + drops empties. Used for LX_CDN_HOSTS so the operator
+// can paste "a.example.com, b.example.com," without worrying about
+// trailing commas or spaces.
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
