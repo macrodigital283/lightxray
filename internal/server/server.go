@@ -45,9 +45,12 @@ func New(cfg config.Config, store *db.Store, xc *xray.Client, version string) ht
 	mux.Handle("DELETE /api/v2/admin/user/{uuid}/",     d.requireAdmin(d.adminDeleteUser))
 
 	// ── customer sub (UUID is the credential) ─────────────────────────
-	mux.HandleFunc("GET /{uuid}/sub/",     d.customerSub)
-	mux.HandleFunc("GET /{uuid}/sub64/",   d.customerSub) // alias — same body
-	mux.HandleFunc("GET /{uuid}/auto/",    d.customerSub) // Hiddify's auto endpoint
+	// The original Hiddify URL is /<client_proxy_path>/<uuid>/sub/ ; nginx
+	// rewrites that to /sub/<uuid> before proxying so the Go mux doesn't
+	// see a wildcard FIRST segment (it would conflict with /ui/* etc).
+	mux.HandleFunc("GET /sub/{uuid}",     d.customerSub)
+	mux.HandleFunc("GET /sub64/{uuid}",   d.customerSub) // alias — same body
+	mux.HandleFunc("GET /auto/{uuid}",    d.customerSub) // Hiddify's auto endpoint
 
 	// ── dashboard ─────────────────────────────────────────────────────
 	// Server-rendered admin UI mounted under the SAME admin proxy path
