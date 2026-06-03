@@ -14,14 +14,11 @@ import (
 // proxy-group so the client picks the fastest edge.
 //
 // `hosts` is the structured cdn_hosts table; each row carries its own
-// transport choice (ws / grpc / both). Empty hosts → single WS proxy
-// on PublicHost.
+// transport choice (ws / grpc / both). Empty hosts → no WS proxies (the
+// grey-cloud PublicHost is never emitted as a key); the profile then
+// carries only Reality if enabled, falling back to DIRECT otherwise.
 func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) string {
 	name := safeName(displayName, "lightxray")
-	if len(hosts) == 0 {
-		// fabricate a single-host slice so the loop below stays simple
-		hosts = []db.CDNHost{{Hostname: cfg.PublicHost, Transport: db.TransportWS}}
-	}
 	// cfg.VLESSWSPath is the FULL path the caller resolved (per_user or
 	// shared mode are both materialised before Build runs).
 	wsPath := cfg.VLESSWSPath
@@ -88,7 +85,12 @@ func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, reality RealityConfig
 	fmt.Fprintf(&b, "  - name: PROXY\n")
 	fmt.Fprintf(&b, "    type: select\n")
 	fmt.Fprintf(&b, "    proxies:\n")
-	fmt.Fprintf(&b, "      - AUTO\n")
+	// AUTO is only useful when there's at least one real proxy to test;
+	// list it first when we have proxies, else PROXY just maps to DIRECT
+	// so the profile stays valid with no servers configured.
+	if len(proxyNames) > 0 {
+		fmt.Fprintf(&b, "      - AUTO\n")
+	}
 	fmt.Fprintf(&b, "      - DIRECT\n")
 	for _, p := range proxyNames {
 		fmt.Fprintf(&b, "      - %q\n", p)

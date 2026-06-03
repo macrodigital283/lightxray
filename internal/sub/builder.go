@@ -39,25 +39,26 @@ func BuildPlain(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, us
 //	ws    → vlessWSTLS only
 //	grpc  → vlessGRPC only
 //	both  → both, WS first (V2Ray clients prefer the first valid server)
+//
+// IMPORTANT: PublicHost (the grey-cloud management/sub-fetch domain) is
+// NEVER used for a WS key — that would expose the unfronted origin IP
+// inside customers' VLESS URLs. When no CDN hosts are enabled the WS
+// bundle is simply empty; only Reality (a deliberately-direct, camouflaged
+// transport) and the configured CDN hosts ever produce keys. An empty
+// return is intentional and valid — the customer's client just shows no
+// WS servers until the operator adds a CDN host or enables Reality.
 func buildLines(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) []string {
 	var lines []string
-	if len(hosts) == 0 {
-		lines = append(lines, vlessWSTLS(cfg, cfg.PublicHost, userUUID, displayName))
-	} else {
-		for _, h := range hosts {
-			if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
-				lines = append(lines, vlessWSTLS(cfg, h.Hostname, userUUID, displayName))
-			}
-			if h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth {
-				lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
-			}
+	for _, h := range hosts {
+		if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
+			lines = append(lines, vlessWSTLS(cfg, h.Hostname, userUUID, displayName))
+		}
+		if h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth {
+			lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
 		}
 	}
 	if reality.HasValue() {
 		lines = append(lines, vlessReality(cfg, reality, userUUID, displayName))
-	}
-	if len(lines) == 0 {
-		lines = []string{vlessWSTLS(cfg, cfg.PublicHost, userUUID, displayName)}
 	}
 	return lines
 }
