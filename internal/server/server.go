@@ -14,6 +14,7 @@ import (
 
 	"github.com/macrodigital283/lightxray/internal/config"
 	"github.com/macrodigital283/lightxray/internal/db"
+	"github.com/macrodigital283/lightxray/internal/ui"
 	"github.com/macrodigital283/lightxray/internal/xray"
 )
 
@@ -47,6 +48,12 @@ func New(cfg config.Config, store *db.Store, xc *xray.Client, version string) ht
 	mux.HandleFunc("GET /{uuid}/sub/",     d.customerSub)
 	mux.HandleFunc("GET /{uuid}/sub64/",   d.customerSub) // alias — same body
 	mux.HandleFunc("GET /{uuid}/auto/",    d.customerSub) // Hiddify's auto endpoint
+
+	// ── dashboard ─────────────────────────────────────────────────────
+	// Server-rendered admin UI mounted under the SAME admin proxy path
+	// as the JSON API (nginx strips it before forwarding, so handlers
+	// here see clean /ui/ paths).
+	ui.New(cfg, store, xc).Register(mux)
 
 	// ── operational ───────────────────────────────────────────────────
 	mux.HandleFunc("GET /healthz", d.healthz)

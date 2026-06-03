@@ -1,0 +1,225 @@
+/* lightxray dashboard styles. Inline-able if needed; kept as a separate
+ * file so the binary can serve it with a stable URL the browser caches. */
+
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-2: #1c232c;
+  --line: #30363d;
+  --fg: #e6edf3;
+  --dim: #8b949e;
+  --accent: #58a6ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace; }
+code { background: var(--panel-2); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+
+/* ── Top nav ───────────────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--fg);
+}
+.host {
+  color: var(--dim);
+  font-size: 12.5px;
+}
+nav { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+nav a { color: var(--dim); }
+nav a:hover { color: var(--fg); text-decoration: none; }
+button.link {
+  background: none; border: none; color: var(--dim); cursor: pointer;
+  font: inherit; padding: 0;
+}
+button.link:hover { color: var(--fg); }
+.inline { display: inline; }
+
+/* ── Main area ────────────────────────────────────────────────── */
+main {
+  max-width: 1100px;
+  margin: 32px auto;
+  padding: 0 24px 64px;
+}
+h1 { font-size: 22px; margin: 0 0 22px; font-weight: 600; }
+h2 { font-size: 14px; margin: 0 0 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+.badge {
+  display: inline-block;
+  background: var(--panel-2);
+  color: var(--dim);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ── Card ─────────────────────────────────────────────────────── */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  margin-bottom: 18px;
+}
+.card.actions { display: flex; gap: 12px; align-items: center; }
+pre.copy {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  user-select: all;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 6px 0;
+}
+details summary { cursor: pointer; color: var(--dim); margin-top: 8px; }
+details[open] summary { color: var(--fg); }
+
+/* ── Definition list ──────────────────────────────────────────── */
+dl.grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px 18px;
+  margin: 0;
+}
+dl.grid dt { color: var(--dim); }
+dl.grid dd { margin: 0; }
+
+/* ── Table ────────────────────────────────────────────────────── */
+table.users {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+table.users th, table.users td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+table.users th {
+  background: var(--panel-2);
+  color: var(--dim);
+  font-weight: 500;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+table.users tr:last-child td { border-bottom: none; }
+table.users tr.disabled td { opacity: 0.55; }
+table.users td small { color: var(--dim); }
+.dim { color: var(--dim); }
+.bar {
+  margin-top: 4px;
+  height: 4px;
+  width: 140px;
+  background: var(--panel-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.empty { color: var(--dim); }
+
+/* ── Status pills ─────────────────────────────────────────────── */
+.ok, .off {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 4px;
+  font-weight: 500;
+}
+.ok  { color: var(--ok);  background: rgba(63,185,80,0.15); }
+.off { color: var(--bad); background: rgba(248,81,73,0.15); }
+
+/* ── Forms ────────────────────────────────────────────────────── */
+form.vstack {
+  display: flex; flex-direction: column; gap: 14px;
+  max-width: 480px;
+}
+label { display: block; }
+label > span { display: block; font-size: 12.5px; color: var(--dim); margin-bottom: 4px; }
+label > span em { color: var(--dim); font-style: normal; opacity: 0.7; }
+input[type="text"], input[type="number"], input[type="password"], input:not([type]) {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+input:focus { outline: none; border-color: var(--accent); }
+button, .cancel {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.1); }
+button.danger { background: var(--bad); color: white; }
+.cancel { background: var(--panel-2); color: var(--fg); display: inline-block; }
+.cancel:hover { text-decoration: none; background: var(--line); }
+.actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+
+/* ── Flashes ──────────────────────────────────────────────────── */
+.flash {
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+.flash.error { background: rgba(248,81,73,0.15); color: var(--bad); border: 1px solid rgba(248,81,73,0.4); }
+
+/* ── Login page ───────────────────────────────────────────────── */
+body.login-page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 32px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+.login-card h1 { font-size: 28px; margin: 0 0 4px; }
+.login-card .host { display: block; margin-bottom: 24px; color: var(--dim); font-size: 13px; }
+.login-card form { text-align: left; display: flex; flex-direction: column; gap: 14px; }
+.login-card button { width: 100%; padding: 10px; }

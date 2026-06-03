@@ -1,0 +1,31 @@
+{{- /*
+  Base layout. Every page defines a "title" + "content" block.
+  Top nav links use {{.Prefix}} so they stay correct under any
+  admin-proxy-path the operator chose at install time.
+*/ -}}
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}lightxray{{end}} — {{.Host}}</title>
+  <link rel="stylesheet" href="{{.Prefix}}/ui/static/style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{.Prefix}}/ui/users/">lightxray</a>
+    <span class="host">{{.Host}}</span>
+    <nav>
+      <a href="{{.Prefix}}/ui/users/">users</a>
+      <a href="{{.Prefix}}/ui/users/new">+ new</a>
+      <form method="post" action="{{.Prefix}}/ui/logout" class="inline">
+        <button type="submit" class="link">logout</button>
+      </form>
+    </nav>
+  </header>
+  <main>
+    {{block "content" .}}{{end}}
+  </main>
+</body>
+</html>
+{{end}}

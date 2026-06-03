@@ -1,0 +1,43 @@
+{{define "title"}}{{.User.Name}}{{end}}
+{{define "content"}}
+  <h1>
+    {{.User.Name}}
+    {{if .User.Enable}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}
+  </h1>
+
+  <section class="card">
+    <h2>Subscription</h2>
+    <p>Paste this URL into V2Ray client (v2rayN, v2rayNG, Streisand, …):</p>
+    <pre class="copy">{{.SubURL}}</pre>
+    <details>
+      <summary>Show decoded VLESS link</summary>
+      <pre class="copy">{{.Bundle}}</pre>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Details</h2>
+    <dl class="grid">
+      <dt>UUID</dt>            <dd><code>{{.User.UUID}}</code></dd>
+      <dt>ID</dt>              <dd>{{.User.SerialID}}</dd>
+      <dt>Comment</dt>         <dd>{{.User.Comment}}</dd>
+      <dt>Usage</dt>           <dd>{{gb .User.UsageBytes}}
+                                   {{if gt .User.UsageLimitBytes 0}} / {{gb .User.UsageLimitBytes}}{{end}}</dd>
+      <dt>Package days</dt>    <dd>{{if eq .User.PackageDays 0}}unlimited{{else}}{{.User.PackageDays}}{{end}}</dd>
+      <dt>Last online</dt>     <dd>{{ago .User.LastOnline}}</dd>
+      <dt>Created</dt>         <dd>{{.User.CreatedAt.Format "2006-01-02 15:04 MST"}}</dd>
+    </dl>
+  </section>
+
+  <section class="card actions">
+    <form method="post" action="{{.Prefix}}/ui/users/{{.User.UUID}}/toggle" class="inline">
+      <button type="submit">{{if .User.Enable}}Disable{{else}}Enable{{end}}</button>
+    </form>
+    <form method="post" action="{{.Prefix}}/ui/users/{{.User.UUID}}/delete" class="inline"
+          onsubmit="return confirm('Permanently delete {{.User.Name}}? Their subscription will stop working.');">
+      <button type="submit" class="danger">Delete</button>
+    </form>
+    <a class="cancel" href="{{.Prefix}}/ui/users/">Back to list</a>
+  </section>
+{{end}}
+{{define "users_detail.html"}}{{template "layout" .}}{{end}}
