@@ -62,8 +62,15 @@ func Load() (Config, error) {
 		VLESSPort:       getint("LX_VLESS_PORT", 443),
 		VLESSSNI:        os.Getenv("LX_VLESS_SNI"),
 		VLESSWSPath:     getenv("LX_VLESS_WS_PATH", "/v2ray"),
-		VLESSFlow:       os.Getenv("LX_VLESS_FLOW"),
-		VLESSAlpn:       os.Getenv("LX_VLESS_ALPN"),
+		VLESSFlow: os.Getenv("LX_VLESS_FLOW"),
+		// http/1.1 default — WS upgrade is HTTP/1.1-only in the
+		// classic spec (RFC 6455). Advertising it in ALPN locks the
+		// TLS handshake to h1 from the start, so the CF edge / nginx
+		// doesn't pick h2 and force an awkward downgrade (or worse:
+		// reject the upgrade entirely with backends that don't speak
+		// RFC 8441 WS-over-h2). Override with LX_VLESS_ALPN= to clear,
+		// or set to "h2,http/1.1" for non-WS transports.
+		VLESSAlpn: getenv("LX_VLESS_ALPN", "http/1.1"),
 		SubName:         getenv("LX_SUB_NAME", "lightxray"),
 		CDNHosts:        splitCSV(os.Getenv("LX_CDN_HOSTS")),
 	}

@@ -63,6 +63,18 @@ func BuildClashMeta(cfg config.Config, hosts []string, userUUID, displayName str
 		fmt.Fprintf(&b, "    servername: %s\n", h)
 		fmt.Fprintf(&b, "    skip-cert-verify: false\n")
 		fmt.Fprintf(&b, "    client-fingerprint: chrome\n")
+		// alpn mirrors what the vless:// URL advertises so the Clash
+		// client's TLS handshake doesn't accidentally pick h2 and trip
+		// over the WS upgrade.
+		if cfg.VLESSAlpn != "" {
+			fmt.Fprintf(&b, "    alpn:\n")
+			for _, a := range strings.Split(cfg.VLESSAlpn, ",") {
+				a = strings.TrimSpace(a)
+				if a != "" {
+					fmt.Fprintf(&b, "      - %s\n", a)
+				}
+			}
+		}
 		fmt.Fprintf(&b, "    network: ws\n")
 		fmt.Fprintf(&b, "    ws-opts:\n")
 		fmt.Fprintf(&b, "      path: %s\n", wsPath)
