@@ -102,12 +102,14 @@ func Load() (Config, error) {
 	if c.ClientProxyPath == "" {
 		missing = append(missing, "LX_CLIENT_PROXY_PATH")
 	}
-	if c.PublicHost == "" {
-		missing = append(missing, "LX_PUBLIC_HOST")
-	}
 	if len(missing) > 0 {
 		return c, fmt.Errorf("missing required env: %v", missing)
 	}
+	// PublicHost is NOT required at startup — a bare install (no
+	// management domain yet) leaves it empty until the operator sets it
+	// from the dashboard's Domains page. While empty, sub/Reality URLs
+	// emit an empty host (harmless — no customer keys are usable yet),
+	// the dashboard is reached over the box's self-signed cert by IP.
 	if c.ReconcilePeriod < 5*time.Second {
 		return c, errors.New("LX_RECONCILE_PERIOD must be >= 5s")
 	}

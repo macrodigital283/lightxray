@@ -32,8 +32,11 @@ server {
     http2 on;
     server_name _;
 
-    ssl_certificate     /etc/letsencrypt/live/__LX_DOMAIN__/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/__LX_DOMAIN__/privkey.pem;
+    # Fixed cert path — the Domains page / install.sh symlink the active
+    # cert here, so nginx config never changes when the management domain
+    # is set or changed (just the symlink target + a reload).
+    ssl_certificate     /etc/lightxray/tls/current/fullchain.pem;
+    ssl_certificate_key /etc/lightxray/tls/current/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     add_header Strict-Transport-Security "max-age=15552000" always;

@@ -1,0 +1,63 @@
+{{define "domains_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>domains — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    {{with .V}}
+    <h1>Management domain</h1>
+    <p class="dim">
+      The management domain is the grey-cloud (DNS-only) hostname that serves
+      the subscription URLs, the admin API + this dashboard, and the Reality
+      connect endpoint. Setting it here issues a Let's Encrypt cert, points
+      nginx at it, and restarts lightxray.
+    </p>
+
+    <section class="card">
+      <h2>Current</h2>
+      {{if .Current}}
+        <p>Management domain: <code>{{.Current}}</code></p>
+      {{else}}
+        <p class="dim">Not set yet — you're running on the box's self-signed cert.
+           Set a domain below to go live.</p>
+      {{end}}
+    </section>
+
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+    {{if .Applied}}<p class="flash ok-flash">Applied. lightxray restarted on
+      <code>{{.Current}}</code> — re-open the dashboard at that domain.</p>{{end}}
+
+    <section class="card">
+      <h2>Set / change management domain</h2>
+      <p class="dim" style="font-size:12.5px">
+        Pre-req: the domain's A record must already point at this box, <strong>DNS-only
+        (grey cloud)</strong>. Port 80 must be reachable for the Let's Encrypt HTTP-01
+        challenge.
+      </p>
+      <form method="post" action="{{$.Prefix}}/ui/domains/" class="vstack"
+            onsubmit="return confirm('Issue cert + switch management domain? lightxray will restart and this dashboard URL will change to the new domain.');">
+        <label>
+          <span>Domain</span>
+          <input name="domain" placeholder="node2.yourdomain.com" spellcheck="false"
+                 autocomplete="off" value="{{.Current}}">
+        </label>
+        <div class="actions">
+          <button type="submit">Issue cert &amp; apply</button>
+        </div>
+      </form>
+    </section>
+
+    {{if .Output}}
+    <section class="card">
+      <h2>Last apply output</h2>
+      <pre class="copy">{{.Output}}</pre>
+    </section>
+    {{end}}
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}

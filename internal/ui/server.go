@@ -72,6 +72,8 @@ func (u *UI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /ui/cdn/{id}/delete", u.requireAuth(u.cdnDelete))
 	mux.HandleFunc("GET /ui/reality/", u.requireAuth(u.realityPage))
 	mux.HandleFunc("POST /ui/reality/", u.requireAuth(u.realitySave))
+	mux.HandleFunc("GET /ui/domains/", u.requireAuth(u.domainsPage))
+	mux.HandleFunc("POST /ui/domains/", u.requireAuth(u.domainsApply))
 	mux.HandleFunc("GET /ui/backup/", u.requireAuth(u.backupPage))
 	mux.HandleFunc("GET /ui/backup/export.json", u.requireAuth(u.backupExport))
 	mux.HandleFunc("POST /ui/backup/restore", u.requireAuth(u.backupRestore))

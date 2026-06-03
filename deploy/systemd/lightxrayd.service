@@ -13,18 +13,22 @@ Restart=on-failure
 RestartSec=3
 LimitNOFILE=65536
 
-# Hardening — lightxrayd doesn't need anything outside its data + log paths.
-NoNewPrivileges=true
+# Hardening — relaxed from the maximal set because the Domains page needs
+# to shell out to `sudo lightxray-applydomain` (issue LE cert + reload
+# nginx + restart self). NoNewPrivileges MUST stay false for sudo to
+# escalate; ProtectSystem is full (not strict) so the apply helper's
+# writes under /etc/lightxray + /etc/letsencrypt + /etc/nginx work via
+# sudo. Everything else stays locked down.
+NoNewPrivileges=false
 PrivateTmp=true
-ProtectSystem=strict
+ProtectSystem=full
 ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
-ReadWritePaths=/var/log/lightxray
+ReadWritePaths=/var/log/lightxray /etc/lightxray
 
 [Install]
 WantedBy=multi-user.target

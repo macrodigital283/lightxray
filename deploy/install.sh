@@ -32,8 +32,11 @@
 #   DOMAIN=node1.example.com bash <(curl -fsSL https://raw.githubusercontent.com/macrodigital283/lightxray/main/deploy/install.sh)
 set -euo pipefail
 
+# DOMAIN is OPTIONAL now. With it, we issue an LE cert + go live straight
+# away. Without it, we install bare (self-signed cert, reachable by IP) —
+# the operator sets the management domain later from the dashboard's
+# Domains page, which issues the cert + flips PublicHost.
 DOMAIN="${DOMAIN:-}"
-[[ -z "$DOMAIN" ]] && { echo "DOMAIN env var required" >&2; exit 1; }
 
 REPO_URL="${REPO_URL:-https://github.com/macrodigital283/lightxray}"
 REPO_REF="${REPO_REF:-main}"
@@ -176,6 +179,16 @@ install -m 0644 "$SRC_DIR/deploy/systemd/lightxrayd.service" /etc/systemd/system
 install -m 0644 "$SRC_DIR/deploy/systemd/xray.service"        /etc/systemd/system/xray.service
 systemctl daemon-reload
 
+# Domain-apply helper + tightly-scoped sudoers grant so the dashboard's
+# Domains page can issue a cert + flip the management domain.
+log "installing lightxray-applydomain helper + sudoers grant"
+install -m 0755 "$SRC_DIR/deploy/lightxray-applydomain" /usr/local/bin/lightxray-applydomain
+cat > /etc/sudoers.d/lightxray <<'SUDO'
+lightxray ALL=(root) NOPASSWD: /usr/local/bin/lightxray-applydomain
+SUDO
+chmod 0440 /etc/sudoers.d/lightxray
+visudo -cf /etc/sudoers.d/lightxray >/dev/null
+
 # ── 8. nginx http backend + stream SNI router ────────────────────────
 log "writing nginx http backend (127.0.0.1:8443) + stream router (:443)"
 mkdir -p /etc/nginx/conf.d
@@ -202,26 +215,34 @@ NGX
 fi
 
 # ── 9. TLS cert ───────────────────────────────────────────────────────
-CERT_DIR="/etc/letsencrypt/live/${DOMAIN}"
-mkdir -p "$CERT_DIR"
-if [[ ! -f $CERT_DIR/fullchain.pem ]]; then
-    openssl req -x509 -newkey rsa:2048 -keyout "$CERT_DIR/privkey.pem" \
-        -out "$CERT_DIR/fullchain.pem" -days 1 -nodes -subj "/CN=${DOMAIN}" >/dev/null 2>&1
+# nginx reads a FIXED path /etc/lightxray/tls/current/. We always lay a
+# self-signed cert there first so nginx can boot. If DOMAIN was provided
+# we then issue LE for it and re-point the symlinks; if not, we leave the
+# self-signed in place and the operator attaches a domain later from the
+# dashboard (which calls lightxray-applydomain to do exactly this).
+TLS_DIR=/etc/lightxray/tls/current
+mkdir -p "$TLS_DIR"
+if [[ ! -e $TLS_DIR/fullchain.pem ]]; then
+    log "writing self-signed bootstrap cert"
+    openssl req -x509 -newkey rsa:2048 -keyout "$TLS_DIR/privkey.pem" \
+        -out "$TLS_DIR/fullchain.pem" -days 825 -nodes \
+        -subj "/CN=${DOMAIN:-lightxray.local}" >/dev/null 2>&1
 fi
 nginx -t
 systemctl restart nginx
-# remove the self-signed stub so certbot can lay a real lineage
-if [[ -f $CERT_DIR/fullchain.pem ]]; then
-    SI=$(openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -issuer 2>/dev/null | sed 's/^issuer=//')
-    SS=$(openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -subject 2>/dev/null | sed 's/^subject=//')
-    if [[ "$SI" == "$SS" ]]; then
-        rm -rf "$CERT_DIR" "/etc/letsencrypt/archive/${DOMAIN}" "/etc/letsencrypt/renewal/${DOMAIN}.conf"
-    fi
+
+if [[ -n "$DOMAIN" ]]; then
+    log "issuing Let's Encrypt cert for ${DOMAIN} (needs grey-cloud + port 80)"
+    LIVE="/etc/letsencrypt/live/${DOMAIN}"
+    certbot certonly --webroot -w /var/www/letsencrypt -d "${DOMAIN}" \
+        --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
+    ln -sf "${LIVE}/fullchain.pem" "$TLS_DIR/fullchain.pem"
+    ln -sf "${LIVE}/privkey.pem"   "$TLS_DIR/privkey.pem"
+    systemctl reload nginx
+else
+    log "no DOMAIN given — running on self-signed cert; set the management"
+    log "domain later from the dashboard Domains page (reachable by IP)."
 fi
-log "issuing Let's Encrypt cert (needs DNS-only / grey-cloud for HTTP-01)"
-certbot certonly --webroot -w /var/www/letsencrypt -d "${DOMAIN}" \
-    --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
-systemctl restart nginx
 
 # ── 10. start services ────────────────────────────────────────────────
 log "enabling + starting services"
@@ -246,13 +267,22 @@ SQL
 systemctl is-active --quiet xray && systemctl is-active --quiet lightxrayd && systemctl is-active --quiet nginx \
   && log "all services active" || log "WARNING: a service is not active — check 'systemctl status'"
 
+BOX_IP=$(curl -fsS -4 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
+if [[ -n "$DOMAIN" ]]; then
+  ACCESS="https://${DOMAIN}/${ADMIN_PROXY_PATH}/ui/login"
+  DOMLINE="Management domain:  ${DOMAIN}   (live)"
+else
+  ACCESS="https://${BOX_IP}/${ADMIN_PROXY_PATH}/ui/login   (self-signed — accept the cert warning)"
+  DOMLINE="Management domain:  NOT SET — add it from the dashboard Domains page"
+fi
+
 cat <<EOF
 
 ──────────────────────────────────────────────────────────────────────
-lightxray installed (single-domain, Reality-on-443 topology).
+lightxray installed (Reality-on-443 topology).
 
-  Management domain:  https://${DOMAIN}      (sub URL + admin + Reality)
-  Reality target:     ${REALITY_TARGET}      (mimicked TLS handshake)
+  ${DOMLINE}
+  Reality target:     ${REALITY_TARGET}
   Admin proxy path:   ${ADMIN_PROXY_PATH}
   Client proxy path:  ${CLIENT_PROXY_PATH}
   Admin UUID:         ${ADMIN_UUID}
@@ -260,17 +290,18 @@ lightxray installed (single-domain, Reality-on-443 topology).
   Reality public key: ${REALITY_PUBKEY}
   Reality short id:   ${REALITY_SHORT_ID}
 
-  Dashboard:  https://${DOMAIN}/${ADMIN_PROXY_PATH}/ui/login
-  base_url for pool:  https://${DOMAIN}/${ADMIN_PROXY_PATH}
+  Dashboard login:  ${ACCESS}
 
-  Right now the bundle carries ONLY Reality (no CDN hosts yet).
-  Add CDN domains anytime in the dashboard → /ui/cdn/ — they route
-  automatically (no nginx change). DNS-only direct domains: add the
-  hostname to the box's nginx server-name is NOT needed; the http
-  backend is a catch-all, so any hostname pointed here just works.
-
-  Smoke test:
-    curl -H "Hiddify-API-Key: ${ADMIN_UUID}" \\
-         https://${DOMAIN}/${ADMIN_PROXY_PATH}/api/v2/admin/me/
+  NEXT STEPS:
+    1. Log into the dashboard (admin UUID above).
+    2. If no domain set yet: open "domain" → enter your management
+       domain (grey-cloud A record → this box) → "Issue cert & apply".
+       lightxray restarts on the new domain.
+    3. Add CDN domains in "cdn" (orange-cloud) — they route
+       automatically, no nginx change.
+    4. Add as a pool API:
+         base_url = https://<domain>/${ADMIN_PROXY_PATH}
+         admin_uuid = ${ADMIN_UUID}
+         client_proxy_path = ${CLIENT_PROXY_PATH}
 ──────────────────────────────────────────────────────────────────────
 EOF

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Privileged helper invoked by lightxrayd via sudo when the operator sets
+# the management domain from the dashboard Domains page. Single argument:
+# the FQDN. Tightly scoped + validated so the sudoers grant is safe.
+#
+# What it does:
+#   1. validate the domain (hostname regex — blocks shell-injection)
+#   2. issue / renew an LE cert via certbot --webroot (nginx :80 serves
+#      the ACME challenge from /var/www/letsencrypt)
+#   3. point the fixed cert path /etc/lightxray/tls/current/{fullchain,
+#      privkey}.pem at the new lineage (nginx reads that path, so its
+#      config never has to change when the domain changes)
+#   4. update LX_PUBLIC_HOST + LX_VLESS_SNI in /etc/lightxray/config.env
+#   5. nginx -t && reload, then restart lightxrayd to pick up the new host
+#
+# Exit non-zero with a clear message on any failure; the dashboard shows
+# the output verbatim.
+set -euo pipefail
+
+DOMAIN="${1:-}"
+RE='^[a-zA-Z0-9][a-zA-Z0-9.-]{1,253}[a-zA-Z0-9]$'
+if [[ ! "$DOMAIN" =~ $RE ]]; then
+    echo "ERROR: invalid domain: '${DOMAIN}'"; exit 1
+fi
+
+CONF=/etc/lightxray/config.env
+TLS_DIR=/etc/lightxray/tls/current
+mkdir -p "$TLS_DIR" /var/www/letsencrypt
+
+echo "==> issuing Let's Encrypt cert for ${DOMAIN}"
+# Remove a self-signed stub if present so certbot can create a real lineage.
+LIVE="/etc/letsencrypt/live/${DOMAIN}"
+if [[ -f "${LIVE}/fullchain.pem" ]]; then
+    ISS=$(openssl x509 -in "${LIVE}/fullchain.pem" -noout -issuer 2>/dev/null | sed 's/^issuer=//')
+    SUB=$(openssl x509 -in "${LIVE}/fullchain.pem" -noout -subject 2>/dev/null | sed 's/^subject=//')
+    [[ "$ISS" == "$SUB" ]] && rm -rf "$LIVE" "/etc/letsencrypt/archive/${DOMAIN}" "/etc/letsencrypt/renewal/${DOMAIN}.conf"
+fi
+certbot certonly --webroot -w /var/www/letsencrypt -d "${DOMAIN}" \
+    --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
+
+echo "==> pointing ${TLS_DIR} at the new cert"
+ln -sf "${LIVE}/fullchain.pem" "${TLS_DIR}/fullchain.pem"
+ln -sf "${LIVE}/privkey.pem"   "${TLS_DIR}/privkey.pem"
+
+echo "==> updating PublicHost in config.env"
+if grep -q '^LX_PUBLIC_HOST=' "$CONF"; then
+    sed -i "s|^LX_PUBLIC_HOST=.*|LX_PUBLIC_HOST=${DOMAIN}|" "$CONF"
+else
+    echo "LX_PUBLIC_HOST=${DOMAIN}" >> "$CONF"
+fi
+if grep -q '^LX_VLESS_SNI=' "$CONF"; then
+    sed -i "s|^LX_VLESS_SNI=.*|LX_VLESS_SNI=${DOMAIN}|" "$CONF"
+else
+    echo "LX_VLESS_SNI=${DOMAIN}" >> "$CONF"
+fi
+
+echo "==> reloading nginx + restarting lightxrayd"
+nginx -t
+systemctl reload nginx
+systemctl restart lightxrayd
+
+echo "OK: management domain set to ${DOMAIN}"
