@@ -246,8 +246,16 @@ fi
 
 # ── 10. start services ────────────────────────────────────────────────
 log "enabling + starting services"
-systemctl enable --now xray.service
-systemctl enable --now lightxrayd.service
+# NB: `enable --now` is NOT enough for xray — the XTLS installer already
+# auto-started it during step 1 with its default (sample) config, so
+# --now is a no-op and the stale instance keeps running without our
+# inbounds. Explicit restart forces it to load /usr/local/etc/xray/
+# config.json. Then lightxrayd (which dial-retries xray's gRPC for 30s)
+# comes up cleanly instead of restart-looping.
+systemctl enable xray.service lightxrayd.service >/dev/null 2>&1 || true
+systemctl restart xray.service
+sleep 1
+systemctl restart lightxrayd.service
 sleep 3   # let lightxrayd migrate the DB before we seed settings
 
 # ── 11. seed Reality + WS-path settings into the DB ──────────────────
