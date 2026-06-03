@@ -1,0 +1,53 @@
+# Single-node dev stack: postgres + xray + lightxrayd.
+#
+# Production normally runs xray + lightxrayd as systemd units on the host
+# (see deploy/install.sh) and leaves postgres as a managed service. This
+# compose file is here for laptop dev + one-command demos.
+#
+# Usage:
+#   docker compose -f deploy/docker-compose.yml up -d --build
+
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lightxray
+      POSTGRES_PASSWORD: devpw
+      POSTGRES_DB: lightxray
+    volumes:
+      - pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "lightxray"]
+      interval: 5s
+      retries: 12
+
+  xray:
+    image: ghcr.io/xtls/xray-core:latest
+    command: ["run", "-c", "/etc/xray/config.json"]
+    volumes:
+      - ./xray-config.json.tmpl:/etc/xray/config.json:ro
+    network_mode: host  # so lightxrayd at 127.0.0.1:8080 can reach 127.0.0.1:10085
+
+  lightxrayd:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    network_mode: host
+    environment:
+      LX_HTTP_ADDR:            "127.0.0.1:8080"
+      LX_DATABASE_URL:         "postgres://lightxray:devpw@127.0.0.1:5432/lightxray?sslmode=disable"
+      LX_ADMIN_UUID:           "${LX_ADMIN_UUID:?set via .env}"
+      LX_ADMIN_PROXY_PATH:     "${LX_ADMIN_PROXY_PATH:?set via .env}"
+      LX_CLIENT_PROXY_PATH:    "${LX_CLIENT_PROXY_PATH:?set via .env}"
+      LX_PUBLIC_HOST:          "${LX_PUBLIC_HOST:?set via .env}"
+      LX_XRAY_GRPC_ADDR:       "127.0.0.1:10085"
+      LX_XRAY_INBOUND_TAG:     "vless-ws-in"
+      LX_VLESS_WS_PATH:        "/v2ray"
+
+volumes:
+  pg:

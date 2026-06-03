@@ -1,0 +1,70 @@
+{
+  "log": {
+    "loglevel": "warning",
+    "access": "/var/log/xray/access.log",
+    "error":  "/var/log/xray/error.log"
+  },
+
+  "api": {
+    "tag":      "api",
+    "services": ["HandlerService", "StatsService", "LoggerService"]
+  },
+
+  "stats": {},
+
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink":   true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink":   true,
+      "statsInboundDownlink": true
+    }
+  },
+
+  "inbounds": [
+    {
+      "tag":      "api-in",
+      "listen":   "127.0.0.1",
+      "port":     10085,
+      "protocol": "dokodemo-door",
+      "settings": { "address": "127.0.0.1" }
+    },
+    {
+      "tag":      "vless-ws-in",
+      "listen":   "127.0.0.1",
+      "port":     10000,
+      "protocol": "vless",
+      "settings": {
+        "clients":    [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "__LX_VLESS_WS_PATH__",
+          "headers": {}
+        }
+      },
+      "sniffing": {
+        "enabled":      true,
+        "destOverride": ["http", "tls"]
+      }
+    }
+  ],
+
+  "outbounds": [
+    { "tag": "direct",  "protocol": "freedom",     "settings": {} },
+    { "tag": "blocked", "protocol": "blackhole",   "settings": {} }
+  ],
+
+  "routing": {
+    "rules": [
+      { "type": "field", "inboundTag": ["api-in"], "outboundTag": "api" },
+      { "type": "field", "ip": ["geoip:private"],  "outboundTag": "blocked" }
+    ]
+  }
+}

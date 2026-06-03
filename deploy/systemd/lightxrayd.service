@@ -1,0 +1,30 @@
+[Unit]
+Description=lightxray panel daemon
+After=network-online.target postgresql.service xray.service
+Wants=network-online.target xray.service
+
+[Service]
+Type=simple
+User=lightxray
+Group=lightxray
+EnvironmentFile=/etc/lightxray/config.env
+ExecStart=/usr/local/bin/lightxrayd
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65536
+
+# Hardening — lightxrayd doesn't need anything outside its data + log paths.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+ReadWritePaths=/var/log/lightxray
+
+[Install]
+WantedBy=multi-user.target
