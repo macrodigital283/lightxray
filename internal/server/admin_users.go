@@ -103,9 +103,13 @@ func (d Deps) adminGetUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toResponse(u))
 }
 
-// createUserBody mirrors HiddifyUserCreate. uuid is IGNORED — server
-// assigns its own. Pool relies on this (see hiddify.ts comment).
+// createUserBody mirrors HiddifyUserCreate. `uuid` is OPTIONAL: omit it for
+// a normal new user (the server generates one) or supply it to create the
+// user with that exact UUID — this is what lets the pool re-create a user
+// on a rebuilt server with the SAME key (disaster recovery). Matches real
+// Hiddify, which also honors a supplied uuid.
 type createUserBody struct {
+	UUID         *string  `json:"uuid"`
 	Name         string   `json:"name"`
 	UsageLimitGB *float64 `json:"usage_limit_GB"`
 	PackageDays  *int     `json:"package_days"`
@@ -142,28 +146,43 @@ func (d Deps) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 	if body.UsageLimitGB != nil {
 		in.UsageLimitBytes = util.GBToBytes(*body.UsageLimitGB)
 	}
+	// Optional caller-supplied UUID — the pool sends this to re-create a
+	// user with their original key (disaster recovery). Reject a malformed
+	// value rather than silently minting a different UUID, which would hand
+	// the customer a broken key.
+	if body.UUID != nil && *body.UUID != "" {
+		id, perr := uuid.Parse(*body.UUID)
+		if perr != nil {
+			writeError(w, http.StatusBadRequest, "invalid `uuid`: "+perr.Error())
+			return
+		}
+		in.UUID = &id
+	}
 
 	ctx, cancel := reqCtx(r)
 	defer cancel()
 
-	u, err := d.store.CreateUser(ctx, in)
+	u, created, err := d.store.CreateUser(ctx, in)
 	if err != nil {
 		slog.Error("createUser db", "err", err)
 		writeError(w, http.StatusInternalServerError, "create user failed")
 		return
 	}
 
-	// Register with xray. If the user is created disabled (enable=false),
-	// we skip the AddUser — they shouldn't be able to connect.
+	// Register with xray. AddUser is idempotent, so re-pushing a user xray
+	// already knows is a no-op. Only roll the DB row back if WE just created
+	// it — never delete a pre-existing user because xray hiccuped. Disabled
+	// users (enable=false) skip AddUser; they shouldn't be able to connect.
 	if in.Enable {
 		if err := d.xc.AddUser(ctx, u.UUID); err != nil {
-			slog.Error("createUser xray AddUser failed — rolling back",
-				"uuid", u.UUID, "err", err)
-			if delErr := d.store.DeleteUser(ctx, u.UUID); delErr != nil {
-				slog.Error("createUser rollback delete failed", "uuid", u.UUID, "err", delErr)
+			slog.Error("createUser xray AddUser failed", "uuid", u.UUID, "created", created, "err", err)
+			if created {
+				if delErr := d.store.DeleteUser(ctx, u.UUID); delErr != nil {
+					slog.Error("createUser rollback delete failed", "uuid", u.UUID, "err", delErr)
+				}
+				writeError(w, http.StatusBadGateway, "xray AddUser failed: "+err.Error())
+				return
 			}
-			writeError(w, http.StatusBadGateway, "xray AddUser failed: "+err.Error())
-			return
 		}
 	}
 

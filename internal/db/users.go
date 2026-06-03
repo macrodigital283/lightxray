@@ -81,9 +81,14 @@ func (s *Store) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 	return u, err
 }
 
-// CreateUserInput is what handlers pass to CreateUser. The UUID is
-// generated server-side (caller does NOT supply it — matches Hiddify).
+// CreateUserInput is what handlers pass to CreateUser. UUID is OPTIONAL:
+// nil → the server generates a fresh one (the normal "add new user" flow);
+// when set (e.g. the pool re-pushing a user onto a rebuilt server for
+// disaster recovery) the row is created with that exact UUID so the
+// customer's existing key keeps working. Matches real Hiddify, which also
+// honors a caller-supplied uuid.
 type CreateUserInput struct {
+	UUID            *uuid.UUID
 	Name            string
 	Comment         string
 	UsageLimitBytes int64
@@ -94,10 +99,17 @@ type CreateUserInput struct {
 	AddedByUUID     uuid.UUID
 }
 
-// CreateUser inserts a new row with a freshly-generated UUID and returns
-// the persisted record.
-func (s *Store) CreateUser(ctx context.Context, in CreateUserInput) (User, error) {
+// CreateUser inserts a new row and returns (user, created, err). When
+// in.UUID is nil a fresh UUID is generated; when set it is used verbatim.
+// If a row with that UUID already exists the insert is a no-op and the
+// existing row is returned with created=false — idempotent, so the pool
+// can re-push the same user without clobbering live data (usage, dates,
+// serial_id stay as they are locally).
+func (s *Store) CreateUser(ctx context.Context, in CreateUserInput) (User, bool, error) {
 	id := uuid.New()
+	if in.UUID != nil {
+		id = *in.UUID
+	}
 	mode := in.Mode
 	if mode == "" {
 		mode = "no_reset"
@@ -110,11 +122,24 @@ func (s *Store) CreateUser(ctx context.Context, in CreateUserInput) (User, error
 		INSERT INTO users (uuid, name, comment, usage_limit_bytes,
 		                   package_days, mode, lang, enable, added_by_uuid)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (uuid) DO NOTHING
 		RETURNING `+userCols,
 		id, in.Name, in.Comment, in.UsageLimitBytes,
 		in.PackageDays, mode, lang, in.Enable, in.AddedByUUID,
 	)
-	return scanUser(row)
+	u, err := scanUser(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// UUID already present — return the existing row untouched.
+		existing, gerr := s.GetUser(ctx, id)
+		if gerr != nil {
+			return User{}, false, gerr
+		}
+		return existing, false, nil
+	}
+	if err != nil {
+		return User{}, false, err
+	}
+	return u, true, nil
 }
 
 // PatchUserInput holds only fields a PATCH may change. nil = "don't touch".

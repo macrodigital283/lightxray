@@ -88,7 +88,7 @@ func (u *UI) usersNewSubmit(w http.ResponseWriter, r *http.Request) {
 	comment := r.PostFormValue("comment")
 	adminID, _ := uuid.Parse(u.cfg.AdminUUID)
 
-	row, err := u.store.CreateUser(r.Context(), db.CreateUserInput{
+	row, _, err := u.store.CreateUser(r.Context(), db.CreateUserInput{
 		Name:            name,
 		Comment:         comment,
 		UsageLimitBytes: util.GBToBytes(limitGB),
