@@ -31,8 +31,9 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name __LX_DOMAIN__;
 
     ssl_certificate     /etc/letsencrypt/live/__LX_DOMAIN__/fullchain.pem;
@@ -53,7 +54,10 @@ server {
     }
 
     # --- client sub: strip /<client>/ prefix, keep /<uuid>/sub/ tail ---
-    location ~ ^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]{36})/(sub64?|auto)/?$ {
+    # NB: regex is double-quoted — nginx treats unquoted `{` as a block
+    # opener and the PCRE compiler rejects the location string. Anything
+    # with `{N}` quantifiers MUST be quoted.
+    location ~ "^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]{36})/(sub64?|auto)/?$" {
         rewrite ^/__LX_CLIENT_PROXY_PATH__/(.*)$ /$1 break;
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -64,7 +68,7 @@ server {
     # We accept the path under the client proxy AND the bare ws-path; the
     # bare form lets browsers / probes hit it directly when needed for
     # debugging. xray ignores the path component beyond what's configured.
-    location ~ ^/__LX_CLIENT_PROXY_PATH__/[a-f0-9-]{36}__LX_VLESS_WS_PATH__$ {
+    location ~ "^/__LX_CLIENT_PROXY_PATH__/[a-f0-9-]{36}__LX_VLESS_WS_PATH__$" {
         proxy_pass http://127.0.0.1:10000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
