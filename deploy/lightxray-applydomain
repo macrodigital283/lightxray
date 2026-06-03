@@ -54,9 +54,18 @@ else
     echo "LX_VLESS_SNI=${DOMAIN}" >> "$CONF"
 fi
 
-echo "==> reloading nginx + restarting lightxrayd"
+echo "==> reloading nginx + scheduling lightxrayd restart"
 nginx -t
 systemctl reload nginx
-systemctl restart lightxrayd
+# Restart lightxrayd to pick up the new PublicHost — but it must NOT run in
+# our process tree. This helper is a sudo child of lightxrayd.service, so a
+# direct restart (even --no-block) SIGTERMs our own cgroup mid-command: the
+# helper dies before printing OK and the dashboard shows a false "Apply
+# failed" even though the cert + config already succeeded. Schedule the
+# restart as a transient unit in its OWN cgroup, firing ~2s after we exit,
+# so we return success and the HTTP response flushes first; lightxrayd then
+# restarts cleanly out-of-band.
+systemd-run --on-active=2s --timer-property=AccuracySec=200ms --collect \
+    /usr/bin/systemctl restart lightxrayd >/dev/null
 
 echo "OK: management domain set to ${DOMAIN}"

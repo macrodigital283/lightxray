@@ -97,7 +97,8 @@ fi
 id -u lightxray >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin lightxray
 id -u xray      >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin xray
 mkdir -p /var/log/lightxray /var/log/xray /etc/lightxray /usr/local/etc/xray \
-         /var/www/letsencrypt /etc/nginx/stream-conf.d
+         /var/www/letsencrypt /etc/nginx/stream-conf.d \
+         /etc/letsencrypt /var/lib/letsencrypt /var/log/letsencrypt
 chown lightxray:lightxray /var/log/lightxray
 chown -R xray:xray /var/log/xray
 
