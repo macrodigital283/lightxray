@@ -107,9 +107,20 @@
     { "tag": "blocked", "protocol": "blackhole",   "settings": {} }
   ],
 
+  "_comment_routing": [
+    "google/gstatic ALWAYS direct, evaluated first. The client latency",
+    "probe (http://www.gstatic.com/generate_204) must reach Google or",
+    "clients show n/a even when the proxy works. gstatic is mis-categorized",
+    "under geosite:cn in the geo db, so any FUTURE geosite:cn block we might",
+    "add would eat it — this rule runs before any such block could.",
+    "(Top-level _comment_ keys are ignored by xray; comments inside the",
+    "rules array are NOT — bare strings there break the parser.)"
+  ],
   "routing": {
     "rules": [
       { "type": "field", "inboundTag": ["api-in"], "outboundTag": "api" },
+      { "type": "field", "outboundTag": "direct",
+        "domain": ["geosite:google", "domain:gstatic.com", "domain:gvt1.com", "domain:gvt2.com"] },
       { "type": "field", "ip": ["geoip:private"],  "outboundTag": "blocked" }
     ]
   }
