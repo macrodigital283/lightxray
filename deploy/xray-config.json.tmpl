@@ -73,6 +73,32 @@
         "enabled":      true,
         "destOverride": ["http", "tls"]
       }
+    },
+    {
+      "tag":      "vless-reality-in",
+      "listen":   "0.0.0.0",
+      "port":     __LX_REALITY_PORT__,
+      "protocol": "vless",
+      "settings": {
+        "clients":    [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network":  "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show":         false,
+          "dest":         "__LX_REALITY_TARGET__:443",
+          "xver":         0,
+          "serverNames":  ["__LX_REALITY_TARGET__"],
+          "privateKey":   "__LX_REALITY_PRIVKEY__",
+          "shortIds":     ["", "__LX_REALITY_SHORT_ID__"]
+        }
+      },
+      "sniffing": {
+        "enabled":      true,
+        "destOverride": ["http", "tls"]
+      }
     }
   ],
 

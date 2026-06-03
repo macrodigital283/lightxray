@@ -18,40 +18,45 @@ import (
 // from `/<client_proxy_path>/<uuid>/sub/`. Emits one or two vless:// URLs
 // per CDN host depending on the host's transport ("ws", "grpc", or
 // "both"); empty `hosts` falls back to a single WS URL on PublicHost.
-func Build(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) string {
-	lines := buildLines(cfg, hosts, userUUID, displayName)
+// If `reality.Enabled` is on it appends an extra direct-IP Reality URL
+// to the bundle.
+func Build(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) string {
+	lines := buildLines(cfg, hosts, reality, userUUID, displayName)
 	bundle := strings.Join(lines, "\n") + "\n"
 	return base64.StdEncoding.EncodeToString([]byte(bundle))
 }
 
 // BuildPlain returns the same content as Build but without the base64
 // wrap. Used by the dashboard "Show decoded VLESS link" disclosure.
-func BuildPlain(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) string {
-	return strings.Join(buildLines(cfg, hosts, userUUID, displayName), "\n")
+func BuildPlain(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) string {
+	return strings.Join(buildLines(cfg, hosts, reality, userUUID, displayName), "\n")
 }
 
 // buildLines walks hosts × transport-modes and produces a vless URL per
-// combination. Operator-set transport modes:
+// combination, then appends one Reality URL if Reality is enabled.
+// Operator-set transport modes:
 //
 //	ws    → vlessWSTLS only
 //	grpc  → vlessGRPC only
 //	both  → both, WS first (V2Ray clients prefer the first valid server)
-func buildLines(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) []string {
-	if len(hosts) == 0 {
-		// no CDN configured — single WS URL pointing at the management host
-		return []string{vlessWSTLS(cfg, cfg.PublicHost, userUUID, displayName)}
-	}
+func buildLines(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) []string {
 	var lines []string
-	for _, h := range hosts {
-		if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
-			lines = append(lines, vlessWSTLS(cfg, h.Hostname, userUUID, displayName))
+	if len(hosts) == 0 {
+		lines = append(lines, vlessWSTLS(cfg, cfg.PublicHost, userUUID, displayName))
+	} else {
+		for _, h := range hosts {
+			if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
+				lines = append(lines, vlessWSTLS(cfg, h.Hostname, userUUID, displayName))
+			}
+			if h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth {
+				lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
+			}
 		}
-		if h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth {
-			lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
-		}
+	}
+	if reality.HasValue() {
+		lines = append(lines, vlessReality(cfg, reality, userUUID, displayName))
 	}
 	if len(lines) == 0 {
-		// every CDN row toggled off both transports somehow — fall back.
 		lines = []string{vlessWSTLS(cfg, cfg.PublicHost, userUUID, displayName)}
 	}
 	return lines

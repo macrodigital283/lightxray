@@ -258,6 +258,7 @@ form.inline-select select:hover { border-color: var(--accent); }
   font-size: 13px;
 }
 .flash.error { background: rgba(248,81,73,0.15); color: var(--bad); border: 1px solid rgba(248,81,73,0.4); }
+.flash.ok-flash { background: rgba(63,185,80,0.15); color: var(--ok); border: 1px solid rgba(63,185,80,0.4); }
 
 /* ── Login page ───────────────────────────────────────────────── */
 body.login-page {

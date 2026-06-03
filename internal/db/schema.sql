@@ -54,6 +54,19 @@ ALTER TABLE cdn_hosts DROP CONSTRAINT IF EXISTS cdn_hosts_transport_chk;
 ALTER TABLE cdn_hosts ADD CONSTRAINT cdn_hosts_transport_chk
     CHECK (transport IN ('ws', 'grpc', 'both'));
 
+-- Singleton key-value config edited from the dashboard.
+-- Reality-related entries seeded by install.sh after keypair generation:
+--   reality_enabled   bool  off by default until operator confirms port open
+--   reality_port      int   default 8443; the xray Reality inbound listens here
+--   reality_target    str   SNI the Reality handshake mimics (e.g. www.microsoft.com)
+--   reality_pubkey    str   x25519 public key — included in every customer vless URL
+--   reality_short_id  str   short id shared with all clients (single-tenant simplification)
+CREATE TABLE IF NOT EXISTS settings (
+    key        TEXT        PRIMARY KEY,
+    value      TEXT        NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- xray's StatsService counters are monotonic from process start. To compute
 -- a delta across an xray restart we persist the last value we observed; if
 -- the next read is LOWER, we treat the delta as new (the counter reset).

@@ -16,7 +16,7 @@ import (
 // `hosts` is the structured cdn_hosts table; each row carries its own
 // transport choice (ws / grpc / both). Empty hosts → single WS proxy
 // on PublicHost.
-func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) string {
+func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) string {
 	name := safeName(displayName, "lightxray")
 	if len(hosts) == 0 {
 		// fabricate a single-host slice so the loop below stays simple
@@ -64,6 +64,11 @@ func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, userUUID, displayName
 			proxyNames = append(proxyNames, pname)
 			writeClashGRPCProxy(&b, cfg, h.Hostname, name, userUUID)
 		}
+	}
+	if reality.HasValue() {
+		pname := realityProxyName(reality.Host, name)
+		proxyNames = append(proxyNames, pname)
+		writeClashRealityProxy(&b, reality, name, userUUID)
 	}
 	fmt.Fprintln(&b)
 

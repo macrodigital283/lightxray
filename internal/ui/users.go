@@ -150,11 +150,11 @@ func (u *UI) usersDetail(w http.ResponseWriter, r *http.Request) {
 		"/" + user.UUID.String()
 	frag := "#" + url.PathEscape(user.Name)
 
-	// Pull the current CDN hosts so the decoded VLESS preview reflects
-	// what subscribers will actually receive. Failures fall back to the
-	// no-CDN single-server bundle.
+	// Pull the current CDN hosts + Reality config so the decoded VLESS
+	// preview reflects what subscribers will actually receive.
 	hosts, _ := u.store.ListEnabledCDNHosts(r.Context())
-	vlessLink := sub.BuildPlain(u.cfg, hosts, user.UUID.String(), user.Name)
+	reality := u.fetchRealityConfig(r)
+	vlessLink := sub.BuildPlain(u.cfg, hosts, reality, user.UUID.String(), user.Name)
 	_ = base64.StdEncoding // kept for future use; encoding helper retained for legacy callers
 
 	u.render(w, "users_detail", map[string]any{

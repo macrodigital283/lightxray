@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/macrodigital283/lightxray/internal/db"
@@ -23,7 +24,8 @@ func (d Deps) customerSub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hosts := d.lookupCDNHosts(r)
-	body := sub.Build(d.cfg, hosts, u.UUID.String(), u.Name)
+	reality := d.lookupReality(r)
+	body := sub.Build(d.cfg, hosts, reality, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -43,8 +45,9 @@ func (d Deps) customerAuto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hosts := d.lookupCDNHosts(r)
+	reality := d.lookupReality(r)
 	if isClashUA(r.Header.Get("User-Agent")) {
-		body := sub.BuildClashMeta(d.cfg, hosts, u.UUID.String(), u.Name)
+		body := sub.BuildClashMeta(d.cfg, hosts, reality, u.UUID.String(), u.Name)
 		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 		w.Header().Set("Profile-Update-Interval", "12")
 		w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -52,7 +55,7 @@ func (d Deps) customerAuto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// default = V2Ray base64
-	body := sub.Build(d.cfg, hosts, u.UUID.String(), u.Name)
+	body := sub.Build(d.cfg, hosts, reality, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -87,7 +90,8 @@ func (d Deps) customerClashMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hosts := d.lookupCDNHosts(r)
-	body := sub.BuildClashMeta(d.cfg, hosts, u.UUID.String(), u.Name)
+	reality := d.lookupReality(r)
+	body := sub.BuildClashMeta(d.cfg, hosts, reality, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -103,6 +107,40 @@ func (d Deps) lookupCDNHosts(r *http.Request) []db.CDNHost {
 	defer cancel()
 	hosts, _ := d.store.ListEnabledCDNHosts(ctx)
 	return hosts
+}
+
+// lookupReality pulls the Reality settings out of the DB into the value
+// type the sub builders consume. Falls back to disabled-Reality (zero
+// value) on any error — Reality is best-effort and never blocks a
+// subscription fetch.
+func (d Deps) lookupReality(r *http.Request) sub.RealityConfig {
+	ctx, cancel := reqCtx(r)
+	defer cancel()
+	m, err := d.store.GetSettings(ctx,
+		db.SettingRealityEnabled, db.SettingRealityPort,
+		db.SettingRealityTarget, db.SettingRealityPubKey,
+		db.SettingRealityShortID,
+	)
+	if err != nil {
+		return sub.RealityConfig{}
+	}
+	if m[db.SettingRealityEnabled] != "true" {
+		return sub.RealityConfig{}
+	}
+	port := 8443
+	if v := m[db.SettingRealityPort]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			port = n
+		}
+	}
+	return sub.RealityConfig{
+		Enabled: true,
+		Host:    d.cfg.PublicHost,
+		Port:    port,
+		Target:  m[db.SettingRealityTarget],
+		PubKey:  m[db.SettingRealityPubKey],
+		ShortID: m[db.SettingRealityShortID],
+	}
 }
 
 // subLookup centralises the auth/404 logic shared by every customer

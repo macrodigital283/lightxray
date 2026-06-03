@@ -1,0 +1,86 @@
+{{define "reality_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>reality — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    {{with .V}}
+    <h1>Reality
+      {{if .Enabled}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}
+    </h1>
+    <p class="dim">
+      VLESS-Reality is a direct-IP transport (no CDN) whose TLS handshake
+      mimics a real popular site — the strongest answer to mobile-carrier
+      DPI and CDN-IP blocklists. Enable this for users whose CDN routes
+      are throttled (Myanmar mobile carriers, Iran, etc.).
+    </p>
+
+    {{if .NoKeypair}}
+      <p class="flash error">
+        No Reality keypair yet. Run on the box:
+        <code>sudo xray x25519</code> — copy the <em>Private key</em> into
+        <code>/usr/local/etc/xray/config.json</code> under the
+        <code>vless-reality-in</code> inbound's <code>realitySettings.privateKey</code>,
+        then the matching <em>Public key</em> into
+        <code>/etc/lightxray/config.env</code> as <code>LX_REALITY_PUBKEY=…</code>
+        and restart xray + lightxrayd. Install.sh does this automatically on
+        fresh installs.
+      </p>
+    {{end}}
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+    {{if .Saved}}<p class="flash ok-flash">Saved. New subscription fetches will include the Reality URL.</p>{{end}}
+
+    <form method="post" action="{{$.Prefix}}/ui/reality/" class="vstack">
+      <label>
+        <span>Enabled</span>
+        <input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}>
+      </label>
+      <label>
+        <span>Port <em>(default 8443; must be open on firewall)</em></span>
+        <input type="number" name="port" min="1" max="65535" value="{{.Port}}">
+      </label>
+      <label>
+        <span>Target SNI <em>(real popular site whose TLS handshake we mimic)</em></span>
+        <input type="text" name="target" value="{{.Target}}" placeholder="www.microsoft.com" spellcheck="false">
+        <small class="dim">
+          Common choices: <code>www.microsoft.com</code>, <code>www.apple.com</code>,
+          <code>www.cloudflare.com</code>. Must serve TLS 1.3 + h2 + a real cert.
+        </small>
+      </label>
+      <label>
+        <span>Short ID <em>(optional; hex, ≤16 chars — shared across all users)</em></span>
+        <input type="text" name="short_id" value="{{.ShortID}}" maxlength="16" pattern="[0-9a-f]*">
+      </label>
+      <label>
+        <span>Public key <em>(read-only; generated at install)</em></span>
+        <input type="text" value="{{.PubKey}}" readonly>
+      </label>
+      <label>
+        <span>Origin host <em>(read-only; this is your PublicHost)</em></span>
+        <input type="text" value="{{.PublicHost}}" readonly>
+      </label>
+      <div class="actions">
+        <button type="submit">Save</button>
+      </div>
+    </form>
+
+    <section class="card" style="margin-top:24px">
+      <h2>How clients connect</h2>
+      <p class="dim">
+        Once enabled, each user's subscription bundle gains an extra server:
+      </p>
+      <pre class="copy">vless://&lt;uuid&gt;@{{.PublicHost}}:{{.Port}}?type=tcp&amp;security=reality&amp;pbk={{.PubKey}}&amp;sid={{.ShortID}}&amp;sni={{.Target}}&amp;fp=chrome&amp;flow=xtls-rprx-vision</pre>
+      <p class="dim">
+        Clash Meta clients get the matching <code>reality-opts</code> block automatically.
+        From the censor's perspective the connection looks like a real TLS conn to
+        <code>{{.Target}}</code>.
+      </p>
+    </section>
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}
