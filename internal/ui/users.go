@@ -151,10 +151,24 @@ func (u *UI) usersDetail(w http.ResponseWriter, r *http.Request) {
 	frag := "#" + url.PathEscape(user.Name)
 
 	// Pull the current CDN hosts + Reality config so the decoded VLESS
-	// preview reflects what subscribers will actually receive.
+	// preview reflects what subscribers will actually receive. Resolve
+	// the effective WS path (per_user / shared mode) the same way the
+	// customer-facing handlers do.
 	hosts, _ := u.store.ListEnabledCDNHosts(r.Context())
 	reality := u.fetchRealityConfig(r)
-	vlessLink := sub.BuildPlain(u.cfg, hosts, reality, user.UUID.String(), user.Name)
+	cfgForUser := u.cfg
+	mode, _ := u.store.GetSetting(r.Context(), db.SettingWSPathMode)
+	if mode == "shared" {
+		if tok, _ := u.store.GetSetting(r.Context(), db.SettingWSPathToken); tok != "" {
+			if tok[0] != '/' {
+				tok = "/" + tok
+			}
+			cfgForUser.VLESSWSPath = tok
+		}
+	} else {
+		cfgForUser.VLESSWSPath = "/" + cfgForUser.ClientProxyPath + "/" + user.UUID.String() + u.cfg.VLESSWSPath
+	}
+	vlessLink := sub.BuildPlain(cfgForUser, hosts, reality, user.UUID.String(), user.Name)
 	_ = base64.StdEncoding // kept for future use; encoding helper retained for legacy callers
 
 	u.render(w, "users_detail", map[string]any{

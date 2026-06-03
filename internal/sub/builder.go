@@ -71,8 +71,14 @@ func buildLines(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, us
 // both the TCP connect target AND the TLS SNI AND the WS Host header,
 // because for a CDN-fronted setup the edge name is the only thing the
 // CDN's TLS terminator sees.
+//
+// The WS path is taken from cfg.VLESSWSPath verbatim — operators in
+// "shared" mode set it to a single short random token (Hiddify-style:
+// "/VXz0nhwTxdZGAh3J7dkqi7Z"); operators in "per_user" mode build the
+// per-user form ("/<client>/<uuid>/v2ray") and store the FULL path
+// there before calling Build.
 func vlessWSTLS(cfg config.Config, host, userUUID, displayName string) string {
-	wsPath := "/" + cfg.ClientProxyPath + "/" + userUUID + cfg.VLESSWSPath
+	wsPath := cfg.VLESSWSPath
 
 	q := url.Values{}
 	q.Set("type", "ws")

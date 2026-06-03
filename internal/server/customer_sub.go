@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/macrodigital283/lightxray/internal/config"
 	"github.com/macrodigital283/lightxray/internal/db"
 	"github.com/macrodigital283/lightxray/internal/sub"
 )
@@ -25,7 +26,8 @@ func (d Deps) customerSub(w http.ResponseWriter, r *http.Request) {
 	}
 	hosts := d.lookupCDNHosts(r)
 	reality := d.lookupReality(r)
-	body := sub.Build(d.cfg, hosts, reality, u.UUID.String(), u.Name)
+	cfgForUser := d.effectiveCfg(r, u.UUID.String())
+	body := sub.Build(cfgForUser, hosts, reality, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -46,8 +48,9 @@ func (d Deps) customerAuto(w http.ResponseWriter, r *http.Request) {
 	}
 	hosts := d.lookupCDNHosts(r)
 	reality := d.lookupReality(r)
+	cfgForUser := d.effectiveCfg(r, u.UUID.String())
 	if isClashUA(r.Header.Get("User-Agent")) {
-		body := sub.BuildClashMeta(d.cfg, hosts, reality, u.UUID.String(), u.Name)
+		body := sub.BuildClashMeta(cfgForUser, hosts, reality, u.UUID.String(), u.Name)
 		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 		w.Header().Set("Profile-Update-Interval", "12")
 		w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -55,7 +58,7 @@ func (d Deps) customerAuto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// default = V2Ray base64
-	body := sub.Build(d.cfg, hosts, reality, u.UUID.String(), u.Name)
+	body := sub.Build(cfgForUser, hosts, reality, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -91,7 +94,8 @@ func (d Deps) customerClashMeta(w http.ResponseWriter, r *http.Request) {
 	}
 	hosts := d.lookupCDNHosts(r)
 	reality := d.lookupReality(r)
-	body := sub.BuildClashMeta(d.cfg, hosts, reality, u.UUID.String(), u.Name)
+	cfgForUser := d.effectiveCfg(r, u.UUID.String())
+	body := sub.BuildClashMeta(cfgForUser, hosts, reality, u.UUID.String(), u.Name)
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
@@ -107,6 +111,37 @@ func (d Deps) lookupCDNHosts(r *http.Request) []db.CDNHost {
 	defer cancel()
 	hosts, _ := d.store.ListEnabledCDNHosts(ctx)
 	return hosts
+}
+
+// effectiveCfg returns a copy of d.cfg with cfg.VLESSWSPath rewritten
+// according to the persisted ws_path_mode. Builders take cfg by value
+// so this is purely scoped to the current request.
+//
+//	ws_path_mode == "shared"  →  cfg.VLESSWSPath = "/<ws_path_token>"
+//	otherwise (per_user)      →  cfg.VLESSWSPath = "/<client>/<uuid>/<env-default>"
+//
+// The "per_user" path needs the user uuid baked in so it's resolved
+// inside the caller (vlessWSTLS receives the final path). For the
+// "shared" route we just plug the token in; nginx + xray's WS inbound
+// listen on that exact literal so it round-trips.
+func (d Deps) effectiveCfg(r *http.Request, userUUID string) config.Config {
+	c := d.cfg
+	ctx, cancel := reqCtx(r)
+	defer cancel()
+	mode, _ := d.store.GetSetting(ctx, db.SettingWSPathMode)
+	if mode == "shared" {
+		tok, _ := d.store.GetSetting(ctx, db.SettingWSPathToken)
+		if tok != "" {
+			if tok[0] != '/' {
+				tok = "/" + tok
+			}
+			c.VLESSWSPath = tok
+		}
+	} else {
+		// preserve the original "/<client>/<uuid>/v2ray" shape
+		c.VLESSWSPath = "/" + c.ClientProxyPath + "/" + userUUID + d.cfg.VLESSWSPath
+	}
+	return c
 }
 
 // lookupReality pulls the Reality settings out of the DB into the value

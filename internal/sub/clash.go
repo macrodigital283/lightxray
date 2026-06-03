@@ -22,7 +22,9 @@ func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, reality RealityConfig
 		// fabricate a single-host slice so the loop below stays simple
 		hosts = []db.CDNHost{{Hostname: cfg.PublicHost, Transport: db.TransportWS}}
 	}
-	wsPath := "/" + cfg.ClientProxyPath + "/" + userUUID + cfg.VLESSWSPath
+	// cfg.VLESSWSPath is the FULL path the caller resolved (per_user or
+	// shared mode are both materialised before Build runs).
+	wsPath := cfg.VLESSWSPath
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# lightxray Clash Meta profile for %s\n", name)

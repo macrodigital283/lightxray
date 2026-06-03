@@ -15,6 +15,14 @@ const (
 	SettingRealityTarget  = "reality_target"
 	SettingRealityPubKey  = "reality_pubkey"
 	SettingRealityShortID = "reality_short_id"
+	// WS path mode — Hiddify uses a single short shared random token in
+	// the WS URL ("/VXz0nhwTxdZGAh3J7dkqi7Z"), not a multi-segment
+	// per-user path. Mobile-carrier DPI seems sensitive to the request
+	// line length / structure; the short shared form survives.
+	//   per_user → /<client>/<uuid>/v2ray  (lightxray's original; verbose)
+	//   shared   → /<random_token>         (Hiddify-compatible; default)
+	SettingWSPathMode  = "ws_path_mode"  // "per_user" | "shared"
+	SettingWSPathToken = "ws_path_token" // the random token used in `shared` mode
 )
 
 // GetSetting returns the stored value or "" if absent (NOT an error —
