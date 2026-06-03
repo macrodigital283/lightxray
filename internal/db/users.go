@@ -278,11 +278,18 @@ func (s *Store) AllUUIDsEnabled(ctx context.Context) ([]uuid.UUID, error) {
 
 // TouchLastOnline updates last_online + start_date (if null) to now.
 // Called when the reconciler observes a positive byte delta for a user.
+//
+// Both columns are explicitly cast at the SQL boundary because pgx's
+// parameter-type inference chokes when the same parameter is consumed
+// at two different target types ("ERROR: inconsistent types deduced
+// for parameter $2 (SQLSTATE 42P08)") — last_online wants TIMESTAMPTZ
+// and start_date wants DATE. Casting both sides locks the inference
+// in and pgx no longer has to guess.
 func (s *Store) TouchLastOnline(ctx context.Context, id uuid.UUID, at time.Time) error {
 	_, err := s.Pool.Exec(ctx, `
 		UPDATE users
-		SET last_online = $2,
-		    start_date  = COALESCE(start_date, $2::DATE),
+		SET last_online = $2::TIMESTAMPTZ,
+		    start_date  = COALESCE(start_date, $2::TIMESTAMPTZ::DATE),
 		    updated_at  = NOW()
 		WHERE uuid = $1`,
 		id, at,
