@@ -144,21 +144,39 @@ sed -e "s|__LX_DOMAIN__|${DOMAIN}|g" \
     > /etc/nginx/sites-available/lightxray-${DOMAIN}.conf
 ln -sf /etc/nginx/sites-available/lightxray-${DOMAIN}.conf /etc/nginx/sites-enabled/
 
-# Stub HTTPS server-name to a self-signed cert so nginx -t passes BEFORE
-# certbot has issued the real one. Replaced after issuance.
-if [[ ! -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem ]]; then
-    mkdir -p /etc/letsencrypt/live/${DOMAIN}
-    openssl req -x509 -newkey rsa:2048 -keyout /etc/letsencrypt/live/${DOMAIN}/privkey.pem \
-        -out /etc/letsencrypt/live/${DOMAIN}/fullchain.pem -days 1 -nodes \
-        -subj "/CN=${DOMAIN}" >/dev/null 2>&1
-fi
-nginx -t
-systemctl reload nginx
+# Cert provisioning.
+# ── Mode A (default): Let's Encrypt via certbot --webroot (HTTP-01).
+#    Requires port 80 reachable on this box from the public internet
+#    (DNS A record pointing here, CF in DNS-only / grey-cloud).
+# ── Mode B: Cloudflare Origin Certificate (or any pre-issued PEM pair).
+#    Set ORIGIN_CERT_FILE + ORIGIN_KEY_FILE to file paths on this box
+#    containing the cert chain and private key. Skips certbot entirely;
+#    works when CF is in front in "Full (strict)" mode.
+CERT_DIR="/etc/letsencrypt/live/${DOMAIN}"
+mkdir -p "$CERT_DIR"
 
-log "issuing Let's Encrypt cert"
-certbot certonly --webroot -w /var/www/letsencrypt -d "${DOMAIN}" \
-    --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
-systemctl reload nginx
+if [[ -n "${ORIGIN_CERT_FILE:-}" && -n "${ORIGIN_KEY_FILE:-}" ]]; then
+    log "installing pre-issued cert from ${ORIGIN_CERT_FILE} + ${ORIGIN_KEY_FILE}"
+    [[ -f "$ORIGIN_CERT_FILE" ]] || { echo "ORIGIN_CERT_FILE not found: $ORIGIN_CERT_FILE" >&2; exit 1; }
+    [[ -f "$ORIGIN_KEY_FILE"  ]] || { echo "ORIGIN_KEY_FILE not found: $ORIGIN_KEY_FILE" >&2; exit 1; }
+    install -m 0644 "$ORIGIN_CERT_FILE" "$CERT_DIR/fullchain.pem"
+    install -m 0600 "$ORIGIN_KEY_FILE"  "$CERT_DIR/privkey.pem"
+    nginx -t
+    systemctl reload nginx
+else
+    # Stub self-signed first so `nginx -t` passes before certbot runs.
+    if [[ ! -f $CERT_DIR/fullchain.pem ]]; then
+        openssl req -x509 -newkey rsa:2048 -keyout $CERT_DIR/privkey.pem \
+            -out $CERT_DIR/fullchain.pem -days 1 -nodes \
+            -subj "/CN=${DOMAIN}" >/dev/null 2>&1
+    fi
+    nginx -t
+    systemctl reload nginx
+    log "issuing Let's Encrypt cert"
+    certbot certonly --webroot -w /var/www/letsencrypt -d "${DOMAIN}" \
+        --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
+    systemctl reload nginx
+fi
 
 # ── 7. start services ────────────────────────────────────────────────
 log "enabling + starting services"
