@@ -52,7 +52,10 @@ ADMIN_UUID="${ADMIN_UUID:-$(cat /proc/sys/kernel/random/uuid)}"
 ADMIN_PROXY_PATH="${ADMIN_PROXY_PATH:-$(openssl rand -hex 12)}"
 CLIENT_PROXY_PATH="${CLIENT_PROXY_PATH:-$(openssl rand -hex 12)}"
 PG_PASSWORD="${PG_PASSWORD:-$(openssl rand -hex 20)}"
-VLESS_WS_PATH="${VLESS_WS_PATH:-/v2ray}"
+# WS path = Hiddify-shape short random token (22 base64-url chars).
+# All users share this path; UUID auth happens inside the VLESS layer.
+# Operator override: pass VLESS_WS_PATH=/something explicit to install.sh.
+VLESS_WS_PATH="${VLESS_WS_PATH:-/$(openssl rand -base64 22 | tr -d '=' | tr '+/' '-_' | head -c 22)}"
 
 if [[ $EUID -ne 0 ]]; then
     echo "must run as root" >&2; exit 1

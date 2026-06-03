@@ -1,15 +1,22 @@
-# nginx vhost — TLS terminator + path router in front of lightxrayd + xray.
+# nginx vhost — TLS terminator + path router for lightxrayd + xray.
 #
 # Placeholders the install.sh script substitutes:
-#   __LX_DOMAIN__               public FQDN
-#   __LX_ADMIN_PROXY_PATH__     admin URL component
-#   __LX_CLIENT_PROXY_PATH__    client URL component
-#   __LX_VLESS_WS_PATH__        WS path xray listens on
+#   __LX_DOMAIN__             public FQDN
+#   __LX_ADMIN_PROXY_PATH__   admin URL prefix
+#   __LX_CLIENT_PROXY_PATH__  client URL prefix (sub fetch only)
+#   __LX_VLESS_WS_PATH__      WS path xray listens on — Hiddify-style
+#                             single short random token (e.g. /aiuURgiB…).
+#                             Path appears VERBATIM in customer vless URLs;
+#                             nginx matches it exact and proxies to xray.
+#   __LX_VLESS_GRPC_SERVICE__ gRPC service name xray's reality-grpc inbound listens on
 #
-# Path-strip behaviour:
-#   /<admin>/api/v2/admin/...   →  proxy_pass to lightxrayd, path becomes /api/v2/admin/...
-#   /<client>/<uuid>/sub/       →  proxy_pass to lightxrayd, path becomes /<uuid>/sub/
-#   /<client>/<uuid><ws-path>   →  proxy_pass to xray (WebSocket upgrade)
+# Why shared-WS-path (single short token, all users) over per-user paths:
+# The TLS payload is opaque to the carrier, but TLS *record sizes* leak
+# the underlying request-line length. Multi-segment per-user paths
+# produce visibly larger first encrypted records than Hiddify's single
+# short token — some mobile DPI engines (Myanmar carriers in particular)
+# appear to key on that side-channel. Matching Hiddify's shape removes
+# that signal.
 
 map $http_upgrade $connection_upgrade {
     default upgrade;
@@ -63,12 +70,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # --- client sub: rewrite /<client>/<uuid>/<format>/  →  /<format>/<uuid> ---
-    # Each format goes to a different lightxrayd handler:
-    #   sub / sub64 / auto  →  base64 VLESS bundle (V2Ray family)
-    #   clashmeta           →  Clash Meta YAML (Clash family)
-    # The literal format goes first in the rewritten URL so the Go mux's
-    # static prefix wins (no overlap with /ui/* etc). Regex is
+    # --- customer sub fetch: rewrite /<client>/<uuid>/<format>/ → /<format>/<uuid> ---
+    # Each format goes to a different lightxrayd handler. Regex is
     # double-quoted because nginx treats bare `{` as a block opener.
     location ~ "^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]{36})/(sub|sub64|auto|clashmeta)/?$" {
         rewrite ^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]+)/(sub|sub64|auto|clashmeta)/?$ /$2/$1 break;
@@ -78,9 +81,6 @@ server {
     }
 
     # --- xray VLESS+gRPC data plane: client connects to /<grpc-service>/Tun ---
-    # gRPC requires HTTP/2 and a different `grpc_pass` directive instead of
-    # `proxy_pass`. Service-name path is fixed (xray expects /<serviceName>/Tun
-    # or /TunMulti); we keep it loosely matched so any method-name suffix works.
     location ~ "^/__LX_VLESS_GRPC_SERVICE__/" {
         grpc_pass grpc://127.0.0.1:10001;
         grpc_set_header Host $host;
@@ -88,14 +88,12 @@ server {
         grpc_send_timeout 86400s;
     }
 
-    # --- xray VLESS+WS data plane: client connects to /<client>/<uuid><ws-path> ---
-    # The vless:// link embeds that full path in its `path` query param so
-    # each user's WS URL is unique and includes the secret client_proxy
-    # token. Before forwarding to xray we REWRITE the URI back to the
-    # bare <ws-path>; xray's WS inbound is configured for that exact
-    # path, so any prefix would 404 inside xray.
-    location ~ "^/__LX_CLIENT_PROXY_PATH__/[a-f0-9-]{36}__LX_VLESS_WS_PATH__$" {
-        rewrite ^.+$ __LX_VLESS_WS_PATH__ break;
+    # --- xray VLESS+WS data plane: Hiddify-style short shared path ---
+    # `location =` is an EXACT-MATCH form — handler runs only when the
+    # request URI matches __LX_VLESS_WS_PATH__ verbatim, no rewriting,
+    # no regex backtracking. xray's wsSettings.path is configured to
+    # the same literal so the request lines up end-to-end.
+    location = __LX_VLESS_WS_PATH__ {
         proxy_pass http://127.0.0.1:10000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
