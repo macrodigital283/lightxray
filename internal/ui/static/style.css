@@ -234,6 +234,18 @@ button.link.danger-link { color: var(--bad); }
 button.link.danger-link:hover { color: #ff7a73; }
 form.row-form { display: flex; gap: 8px; }
 form.row-form input { flex: 1; }
+
+form.inline-select { display: inline; }
+form.inline-select select {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+form.inline-select select:hover { border-color: var(--accent); }
 .cancel { background: var(--panel-2); color: var(--fg); display: inline-block; }
 .cancel:hover { text-decoration: none; background: var(--line); }
 .actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }

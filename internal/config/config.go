@@ -27,12 +27,13 @@ type Config struct {
 
 	ReconcilePeriod time.Duration // how often to poll xray stats
 
-	VLESSPort   int    // 443 in front of Cloudflare
-	VLESSSNI    string // TLS SNI; defaults to PublicHost
-	VLESSWSPath string // WS path xray listens on
-	VLESSFlow   string // optional
-	VLESSAlpn   string // optional
-	SubName     string // friendly name in vless:// fragment
+	VLESSPort        int    // 443 in front of Cloudflare
+	VLESSSNI         string // TLS SNI; defaults to PublicHost
+	VLESSWSPath      string // WS path xray listens on
+	VLESSFlow        string // optional
+	VLESSAlpn        string // optional
+	VLESSGRPCService string // gRPC serviceName (must match xray config)
+	SubName          string // friendly name in vless:// fragment
 
 	// CDNHosts is the list of CDN-fronted domains the subscription
 	// bundle emits one VLESS URL per. Operators front lightxray behind
@@ -70,7 +71,8 @@ func Load() (Config, error) {
 		// reject the upgrade entirely with backends that don't speak
 		// RFC 8441 WS-over-h2). Override with LX_VLESS_ALPN= to clear,
 		// or set to "h2,http/1.1" for non-WS transports.
-		VLESSAlpn: getenv("LX_VLESS_ALPN", "http/1.1"),
+		VLESSAlpn:        getenv("LX_VLESS_ALPN", "http/1.1"),
+		VLESSGRPCService: getenv("LX_VLESS_GRPC_SERVICE", "GunService"),
 		SubName:         getenv("LX_SUB_NAME", "lightxray"),
 		CDNHosts:        splitCSV(os.Getenv("LX_CDN_HOSTS")),
 	}

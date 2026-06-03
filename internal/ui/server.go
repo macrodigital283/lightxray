@@ -68,6 +68,7 @@ func (u *UI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/cdn/", u.requireAuth(u.cdnList))
 	mux.HandleFunc("POST /ui/cdn/", u.requireAuth(u.cdnAdd))
 	mux.HandleFunc("POST /ui/cdn/{id}/toggle", u.requireAuth(u.cdnToggle))
+	mux.HandleFunc("POST /ui/cdn/{id}/transport", u.requireAuth(u.cdnSetTransport))
 	mux.HandleFunc("POST /ui/cdn/{id}/delete", u.requireAuth(u.cdnDelete))
 	mux.HandleFunc("GET /ui/backup/", u.requireAuth(u.backupPage))
 	mux.HandleFunc("GET /ui/backup/export.json", u.requireAuth(u.backupExport))

@@ -1,6 +1,7 @@
 // Package sub builds the customer subscription bundle — a base64-encoded
-// blob of vless:// URIs, one per CDN-fronted domain. Matches what
-// Hiddify's /sub/ endpoint returns so V2Ray clients accept it unchanged.
+// blob of vless:// URIs, one per CDN-fronted domain × enabled transport.
+// Matches what Hiddify's /sub/ endpoint returns so V2Ray clients accept
+// it unchanged.
 package sub
 
 import (
@@ -10,42 +11,50 @@ import (
 	"strings"
 
 	"github.com/macrodigital283/lightxray/internal/config"
+	"github.com/macrodigital283/lightxray/internal/db"
 )
 
 // Build returns the base64 bundle a customer's V2Ray client will pull
-// from `/<client_proxy_path>/<uuid>/sub/`. Emits one vless:// URL per
-// host in `hosts`; if `hosts` is empty, falls back to PublicHost only
-// (single-server / no-CDN mode).
-//
-// All URLs share UUID + WS path; only server/sni/Host differ. Clients
-// (v2rayN, v2rayNG, Streisand) treat each as a separate server and
-// the user picks the fastest. `hosts` comes from the cdn_hosts table
-// at request time — the caller is responsible for the DB lookup so
-// this stays a pure function.
-func Build(cfg config.Config, hosts []string, userUUID, displayName string) string {
-	if len(hosts) == 0 {
-		hosts = []string{cfg.PublicHost}
-	}
-	lines := make([]string, 0, len(hosts))
-	for _, h := range hosts {
-		lines = append(lines, vlessWSTLS(cfg, h, userUUID, displayName))
-	}
+// from `/<client_proxy_path>/<uuid>/sub/`. Emits one or two vless:// URLs
+// per CDN host depending on the host's transport ("ws", "grpc", or
+// "both"); empty `hosts` falls back to a single WS URL on PublicHost.
+func Build(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) string {
+	lines := buildLines(cfg, hosts, userUUID, displayName)
 	bundle := strings.Join(lines, "\n") + "\n"
 	return base64.StdEncoding.EncodeToString([]byte(bundle))
 }
 
-// BuildPlain is Build without the base64 wrapping — for the UI
-// "Show decoded VLESS link" disclosure where each URL can be copied
-// individually.
-func BuildPlain(cfg config.Config, hosts []string, userUUID, displayName string) string {
+// BuildPlain returns the same content as Build but without the base64
+// wrap. Used by the dashboard "Show decoded VLESS link" disclosure.
+func BuildPlain(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) string {
+	return strings.Join(buildLines(cfg, hosts, userUUID, displayName), "\n")
+}
+
+// buildLines walks hosts × transport-modes and produces a vless URL per
+// combination. Operator-set transport modes:
+//
+//	ws    → vlessWSTLS only
+//	grpc  → vlessGRPC only
+//	both  → both, WS first (V2Ray clients prefer the first valid server)
+func buildLines(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) []string {
 	if len(hosts) == 0 {
-		hosts = []string{cfg.PublicHost}
+		// no CDN configured — single WS URL pointing at the management host
+		return []string{vlessWSTLS(cfg, cfg.PublicHost, userUUID, displayName)}
 	}
-	lines := make([]string, 0, len(hosts))
+	var lines []string
 	for _, h := range hosts {
-		lines = append(lines, vlessWSTLS(cfg, h, userUUID, displayName))
+		if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
+			lines = append(lines, vlessWSTLS(cfg, h.Hostname, userUUID, displayName))
+		}
+		if h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth {
+			lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
+		}
 	}
-	return strings.Join(lines, "\n")
+	if len(lines) == 0 {
+		// every CDN row toggled off both transports somehow — fall back.
+		lines = []string{vlessWSTLS(cfg, cfg.PublicHost, userUUID, displayName)}
+	}
+	return lines
 }
 
 // vlessWSTLS assembles a single vless:// URI per the de-facto V2Ray

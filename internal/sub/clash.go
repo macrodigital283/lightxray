@@ -5,19 +5,22 @@ import (
 	"strings"
 
 	"github.com/macrodigital283/lightxray/internal/config"
+	"github.com/macrodigital283/lightxray/internal/db"
 )
 
 // BuildClashMeta returns a Clash Meta (mihomo) YAML config that points
-// at our VLESS+WS+TLS inbound for the given user. Emits ONE proxy entry
-// per CDN host in cfg.CDNHosts (fallback: PublicHost only) and wraps
-// them in a `url-test` proxy-group so the client auto-picks the fastest
-// edge. Self-contained — many Clash Meta clients (Clash Verge Rev,
-// FlClash, Stash) treat a subscription as the *complete* profile and
-// won't fill in sensible defaults for the top-level options.
-func BuildClashMeta(cfg config.Config, hosts []string, userUUID, displayName string) string {
+// at our VLESS inbound for the given user. Emits one proxy per
+// (host × enabled-transport) pair and wraps them in a `url-test` AUTO
+// proxy-group so the client picks the fastest edge.
+//
+// `hosts` is the structured cdn_hosts table; each row carries its own
+// transport choice (ws / grpc / both). Empty hosts → single WS proxy
+// on PublicHost.
+func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, userUUID, displayName string) string {
 	name := safeName(displayName, "lightxray")
 	if len(hosts) == 0 {
-		hosts = []string{cfg.PublicHost}
+		// fabricate a single-host slice so the loop below stays simple
+		hosts = []db.CDNHost{{Hostname: cfg.PublicHost, Transport: db.TransportWS}}
 	}
 	wsPath := "/" + cfg.ClientProxyPath + "/" + userUUID + cfg.VLESSWSPath
 
@@ -47,45 +50,24 @@ func BuildClashMeta(cfg config.Config, hosts []string, userUUID, displayName str
 	fmt.Fprintf(&b, "    - https://8.8.8.8/dns-query\n")
 	fmt.Fprintln(&b)
 
-	// ── proxies: one per CDN host ───────────────────────────────────
-	proxyNames := make([]string, 0, len(hosts))
+	// ── proxies: one per (host × transport) combo ───────────────────
+	proxyNames := make([]string, 0, len(hosts)*2)
 	fmt.Fprintf(&b, "proxies:\n")
 	for _, h := range hosts {
-		pname := fmt.Sprintf("%s | %s", h, name)
-		proxyNames = append(proxyNames, pname)
-		fmt.Fprintf(&b, "  - name: %q\n", pname)
-		fmt.Fprintf(&b, "    type: vless\n")
-		fmt.Fprintf(&b, "    server: %s\n", h)
-		fmt.Fprintf(&b, "    port: %d\n", cfg.VLESSPort)
-		fmt.Fprintf(&b, "    uuid: %s\n", userUUID)
-		fmt.Fprintf(&b, "    udp: true\n")
-		fmt.Fprintf(&b, "    tls: true\n")
-		fmt.Fprintf(&b, "    servername: %s\n", h)
-		fmt.Fprintf(&b, "    skip-cert-verify: false\n")
-		fmt.Fprintf(&b, "    client-fingerprint: chrome\n")
-		// alpn mirrors what the vless:// URL advertises so the Clash
-		// client's TLS handshake doesn't accidentally pick h2 and trip
-		// over the WS upgrade.
-		if cfg.VLESSAlpn != "" {
-			fmt.Fprintf(&b, "    alpn:\n")
-			for _, a := range strings.Split(cfg.VLESSAlpn, ",") {
-				a = strings.TrimSpace(a)
-				if a != "" {
-					fmt.Fprintf(&b, "      - %s\n", a)
-				}
-			}
+		if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
+			pname := fmt.Sprintf("%s | %s", h.Hostname, name)
+			proxyNames = append(proxyNames, pname)
+			writeClashWSProxy(&b, cfg, h.Hostname, pname, userUUID, wsPath)
 		}
-		fmt.Fprintf(&b, "    network: ws\n")
-		fmt.Fprintf(&b, "    ws-opts:\n")
-		fmt.Fprintf(&b, "      path: %s\n", wsPath)
-		fmt.Fprintf(&b, "      headers:\n")
-		fmt.Fprintf(&b, "        Host: %s\n", h)
+		if h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth {
+			pname := grpcProxyName(h.Hostname, name)
+			proxyNames = append(proxyNames, pname)
+			writeClashGRPCProxy(&b, cfg, h.Hostname, name, userUUID)
+		}
 	}
 	fmt.Fprintln(&b)
 
 	// ── proxy-groups ────────────────────────────────────────────────
-	// AUTO: url-test picks the fastest edge automatically every 5 min.
-	// PROXY: manual select with AUTO + DIRECT + individual edges.
 	fmt.Fprintf(&b, "proxy-groups:\n")
 	fmt.Fprintf(&b, "  - name: AUTO\n")
 	fmt.Fprintf(&b, "    type: url-test\n")
@@ -116,6 +98,34 @@ func BuildClashMeta(cfg config.Config, hosts []string, userUUID, displayName str
 	fmt.Fprintf(&b, "  - GEOIP,LAN,DIRECT\n")
 	fmt.Fprintf(&b, "  - MATCH,PROXY\n")
 	return b.String()
+}
+
+// writeClashWSProxy emits one Clash-Meta YAML proxy block for a
+// WS-transport CDN host. Mirrors what we used to inline directly in
+// BuildClashMeta — extracted so the per-host transport-switch in
+// BuildClashMeta stays readable.
+func writeClashWSProxy(b *strings.Builder, cfg config.Config, host, pname, userUUID, wsPath string) {
+	fmt.Fprintf(b, "  - name: %q\n", pname)
+	fmt.Fprintf(b, "    type: vless\n")
+	fmt.Fprintf(b, "    server: %s\n", host)
+	fmt.Fprintf(b, "    port: %d\n", cfg.VLESSPort)
+	fmt.Fprintf(b, "    uuid: %s\n", userUUID)
+	fmt.Fprintf(b, "    udp: true\n")
+	fmt.Fprintf(b, "    tls: true\n")
+	fmt.Fprintf(b, "    servername: %s\n", host)
+	fmt.Fprintf(b, "    skip-cert-verify: false\n")
+	fmt.Fprintf(b, "    client-fingerprint: chrome\n")
+	if cfg.VLESSAlpn != "" {
+		fmt.Fprintf(b, "    alpn:\n")
+		for _, a := range splitTrim(cfg.VLESSAlpn) {
+			fmt.Fprintf(b, "      - %s\n", a)
+		}
+	}
+	fmt.Fprintf(b, "    network: ws\n")
+	fmt.Fprintf(b, "    ws-opts:\n")
+	fmt.Fprintf(b, "      path: %s\n", wsPath)
+	fmt.Fprintf(b, "      headers:\n")
+	fmt.Fprintf(b, "        Host: %s\n", host)
 }
 
 // safeName collapses anything weird in the display name down to a plain

@@ -77,6 +77,17 @@ server {
         proxy_set_header Host $host;
     }
 
+    # --- xray VLESS+gRPC data plane: client connects to /<grpc-service>/Tun ---
+    # gRPC requires HTTP/2 and a different `grpc_pass` directive instead of
+    # `proxy_pass`. Service-name path is fixed (xray expects /<serviceName>/Tun
+    # or /TunMulti); we keep it loosely matched so any method-name suffix works.
+    location ~ "^/__LX_VLESS_GRPC_SERVICE__/" {
+        grpc_pass grpc://127.0.0.1:10001;
+        grpc_set_header Host $host;
+        grpc_read_timeout 86400s;
+        grpc_send_timeout 86400s;
+    }
+
     # --- xray VLESS+WS data plane: client connects to /<client>/<uuid><ws-path> ---
     # The vless:// link embeds that full path in its `path` query param so
     # each user's WS URL is unique and includes the secret client_proxy

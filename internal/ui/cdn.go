@@ -76,6 +76,31 @@ func (u *UI) cdnToggle(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.absURL("/ui/cdn/"), http.StatusFound)
 }
 
+// cdnSetTransport — POST /ui/cdn/{id}/transport
+// Form field `transport` ∈ {ws, grpc, both}. Drops back to the list page
+// with an error flash if validation fails.
+func (u *UI) cdnSetTransport(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt64(r, "id", w)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		u.cdnListWithError(w, r, "bad form")
+		return
+	}
+	t := r.PostFormValue("transport")
+	if err := u.store.SetCDNHostTransport(r.Context(), id, t); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			u.renderError(w, http.StatusNotFound, "cdn host not found")
+			return
+		}
+		slog.Warn("ui cdn set transport", "id", id, "t", t, "err", err)
+		u.cdnListWithError(w, r, "Set transport failed: "+err.Error())
+		return
+	}
+	http.Redirect(w, r, u.absURL("/ui/cdn/"), http.StatusFound)
+}
+
 // cdnDelete — POST /ui/cdn/{id}/delete
 func (u *UI) cdnDelete(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathInt64(r, "id", w)

@@ -94,14 +94,14 @@ func (d Deps) customerClashMeta(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(body))
 }
 
-// lookupCDNHosts fetches the enabled CDN hostnames from the DB. A
-// failed lookup falls back to an empty slice — sub.Build then uses
-// PublicHost as the single edge. Never returns an error to the
+// lookupCDNHosts fetches the enabled CDN host rows (with transport) from
+// the DB. A failed lookup falls back to an empty slice — sub.Build then
+// uses PublicHost as the single edge. Never returns an error to the
 // caller; CDN config is best-effort vs. the user-impacting handler.
-func (d Deps) lookupCDNHosts(r *http.Request) []string {
+func (d Deps) lookupCDNHosts(r *http.Request) []db.CDNHost {
 	ctx, cancel := reqCtx(r)
 	defer cancel()
-	hosts, _ := d.store.ListEnabledCDNHostnames(ctx)
+	hosts, _ := d.store.ListEnabledCDNHosts(ctx)
 	return hosts
 }
 

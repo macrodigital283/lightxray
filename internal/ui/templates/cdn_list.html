@@ -37,6 +37,7 @@
         <thead>
           <tr>
             <th>Hostname</th>
+            <th>Transport</th>
             <th>State</th>
             <th>Added</th>
             <th class="dim">Actions</th>
@@ -46,6 +47,16 @@
           {{range .Hosts}}
             <tr class="{{if not .Enabled}}disabled{{end}}">
               <td><code>{{.Hostname}}</code></td>
+              <td>
+                <form method="post" action="{{$.Prefix}}/ui/cdn/{{.ID}}/transport" class="inline-select">
+                  <select name="transport" onchange="this.form.submit()">
+                    <option value="ws"   {{if eq .Transport "ws"}}selected{{end}}>WS</option>
+                    <option value="grpc" {{if eq .Transport "grpc"}}selected{{end}}>gRPC</option>
+                    <option value="both" {{if eq .Transport "both"}}selected{{end}}>Both</option>
+                  </select>
+                  <noscript><button type="submit" class="link">save</button></noscript>
+                </form>
+              </td>
               <td>{{if .Enabled}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}</td>
               <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
               <td>
@@ -61,6 +72,12 @@
           {{end}}
         </tbody>
       </table>
+      <p class="dim" style="margin-top:14px;font-size:12.5px">
+        Transport modes: <strong>WS</strong> = WebSocket (Hiddify-style, works through any CDN that
+        supports WebSockets). <strong>gRPC</strong> = HTTP/2-based; needs <em>Cloudflare → Network →
+        gRPC: On</em> and a different bundled URL shape. <strong>Both</strong> emits a WS link <em>and</em>
+        a gRPC link per user so clients can fall back if one transport gets throttled.
+      </p>
     {{end}}
   </main>
 </body>

@@ -53,6 +53,26 @@
         "enabled":      true,
         "destOverride": ["http", "tls"]
       }
+    },
+    {
+      "tag":      "vless-grpc-in",
+      "listen":   "127.0.0.1",
+      "port":     10001,
+      "protocol": "vless",
+      "settings": {
+        "clients":    [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "grpcSettings": {
+          "serviceName": "__LX_VLESS_GRPC_SERVICE__"
+        }
+      },
+      "sniffing": {
+        "enabled":      true,
+        "destOverride": ["http", "tls"]
+      }
     }
   ],
 

@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS cdn_hosts (
 );
 CREATE INDEX IF NOT EXISTS cdn_hosts_enabled_idx ON cdn_hosts (enabled);
 
+-- Per-host transport pick. Allowed: 'ws', 'grpc', 'both'. Added in a
+-- separate ALTER so older deployments upgrade in place.
+ALTER TABLE cdn_hosts ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT 'ws';
+ALTER TABLE cdn_hosts DROP CONSTRAINT IF EXISTS cdn_hosts_transport_chk;
+ALTER TABLE cdn_hosts ADD CONSTRAINT cdn_hosts_transport_chk
+    CHECK (transport IN ('ws', 'grpc', 'both'));
+
 -- xray's StatsService counters are monotonic from process start. To compute
 -- a delta across an xray restart we persist the last value we observed; if
 -- the next read is LOWER, we treat the delta as new (the counter reset).
