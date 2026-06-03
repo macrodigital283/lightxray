@@ -131,18 +131,28 @@ func (c *Client) Close() error {
 // exists xray returns AlreadyExists, which we treat as success.
 //
 // The `email` field doubles as the xray stat key — we always set it to
-// the user's UUID string so stat lookups round-trip cleanly. The same
-// `email` is shared across inbounds; xray namespaces stats by inbound
-// tag internally so there's no collision.
+// the user's UUID string so stat lookups round-trip cleanly.
+//
+// Reality inbounds REQUIRE Flow=xtls-rprx-vision in the user's
+// vless.Account. The client emits flow=xtls-rprx-vision in its share
+// link and xray's reality inbound rejects users whose registered
+// account doesn't match ("account ... is not able to use the flow").
+// We detect Reality tags by name (contains "reality") and set Flow on
+// those AddUsers only — WS/gRPC inbounds must keep Flow empty.
 func (c *Client) AddUser(ctx context.Context, userUUID uuid.UUID) error {
 	var lastErr error
 	for _, tag := range c.inboundTags {
+		flow := ""
+		if isRealityTag(tag) {
+			flow = "xtls-rprx-vision"
+		}
 		op := &proxymancmd.AddUserOperation{
 			User: &protocol.User{
 				Level: 0,
 				Email: userUUID.String(),
 				Account: serial.ToTypedMessage(&vless.Account{
-					Id: userUUID.String(),
+					Id:   userUUID.String(),
+					Flow: flow,
 				}),
 			},
 		}
@@ -152,6 +162,14 @@ func (c *Client) AddUser(ctx context.Context, userUUID uuid.UUID) error {
 		}
 	}
 	return lastErr
+}
+
+// isRealityTag identifies an inbound tag that's serving Reality, so we
+// can attach xtls-rprx-vision flow to that user's account. Defaults to
+// substring match on "reality" — matches our default tag
+// "vless-reality-in" and any operator-renamed variant.
+func isRealityTag(tag string) bool {
+	return indexOf(tag, "reality") >= 0
 }
 
 // RemoveUser deregisters a VLESS user from EVERY configured inbound.
