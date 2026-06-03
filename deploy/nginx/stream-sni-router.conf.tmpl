@@ -1,0 +1,41 @@
+# nginx stream-mode SNI router — sits in front of :443 and dispatches
+# TLS connections to the right internal backend WITHOUT terminating
+# TLS itself. ssl_preread peeks the SNI field, map decides upstream.
+#
+# Why: lets Reality run on the standard :443 port (best DPI evasion —
+# looks identical to real HTTPS to a mobile carrier) without conflicting
+# with the nginx HTTPS server that handles admin UI + CDN-fronted WS.
+#
+# Topology:
+#   :443 (public)  → this stream router → 127.0.0.1:8443 (nginx http)
+#                                        OR 127.0.0.1:7443 (xray Reality)
+#
+# Placeholders substituted at install time:
+#   __LX_DOMAIN__              public FQDN
+#   __LX_CDN_HOSTS_LIST__      one host per line, indent-matched, e.g.
+#                                cdn1.vvmail.online            http_backend;
+#                                cdn2.vvmail.online            http_backend;
+#   __LX_REALITY_TARGET__      SNI of the borrowed target site
+#
+# include this from /etc/nginx/nginx.conf inside a top-level
+# stream { include /etc/nginx/stream-conf.d/*.conf; } block.
+
+map $ssl_preread_server_name $sni_backend {
+    __LX_DOMAIN__              http_backend;
+__LX_CDN_HOSTS_LIST__
+    __LX_REALITY_TARGET__      reality_backend;
+    default                    http_backend;
+}
+
+upstream http_backend    { server 127.0.0.1:8443; }
+upstream reality_backend { server 127.0.0.1:7443; }
+
+server {
+    listen     443 reuseport;
+    listen [::]:443 reuseport;
+    ssl_preread on;
+    proxy_protocol_timeout 5s;
+    proxy_connect_timeout  5s;
+    proxy_timeout 86400s;
+    proxy_pass $sni_backend;
+}
