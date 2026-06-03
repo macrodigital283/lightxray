@@ -1,7 +1,16 @@
-{{define "title"}}error {{.Code}}{{end}}
-{{define "content"}}
-  <h1>{{.Code}} — error</h1>
-  <p>{{.Message}}</p>
-  <p><a href="{{.Prefix}}/ui/users/">Back to users</a></p>
+{{define "error_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>error {{.Code}} — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    <h1>{{.Code}} — error</h1>
+    <p>{{.Message}}</p>
+    <p><a href="{{.Prefix}}/ui/users/">Back to users</a></p>
+  </main>
+</body>
+</html>
 {{end}}
-{{define "error.html"}}{{template "layout" .}}{{end}}

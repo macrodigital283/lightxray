@@ -1,31 +1,40 @@
-{{define "title"}}new user{{end}}
-{{define "content"}}
-  <h1>New user</h1>
-  {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
-  <form method="post" action="{{.Prefix}}/ui/users/new" class="vstack">
-    <label>
-      <span>Name <em>(required)</em></span>
-      <input name="name" autofocus required value="{{if .Values}}{{index .Values.name 0}}{{end}}">
-    </label>
-    <label>
-      <span>Usage limit (GB) <em>— 0 = unlimited</em></span>
-      <input name="usage_limit_GB" type="number" min="0" step="0.1"
-             value="{{if .Values}}{{index .Values.usage_limit_GB 0}}{{else}}0{{end}}">
-    </label>
-    <label>
-      <span>Package days <em>— 0 = unlimited</em></span>
-      <input name="package_days" type="number" min="0" step="1"
-             value="{{if .Values}}{{index .Values.package_days 0}}{{else}}0{{end}}">
-    </label>
-    <label>
-      <span>Comment <em>(optional)</em></span>
-      <input name="comment" value="{{if .Values}}{{index .Values.comment 0}}{{end}}"
-             placeholder="e.g. customer name, internal id">
-    </label>
-    <div class="actions">
-      <button type="submit">Create</button>
-      <a class="cancel" href="{{.Prefix}}/ui/users/">Cancel</a>
-    </div>
-  </form>
+{{define "users_new"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>new user — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    <h1>New user</h1>
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+    <form method="post" action="{{.Prefix}}/ui/users/new" class="vstack">
+      <label>
+        <span>Name <em>(required)</em></span>
+        <input name="name" autofocus required value="{{if .Values}}{{index .Values.name 0}}{{end}}">
+      </label>
+      <label>
+        <span>Usage limit (GB) <em>— 0 = unlimited</em></span>
+        <input name="usage_limit_GB" type="number" min="0" step="0.1"
+               value="{{if .Values}}{{index .Values.usage_limit_GB 0}}{{else}}0{{end}}">
+      </label>
+      <label>
+        <span>Package days <em>— 0 = unlimited</em></span>
+        <input name="package_days" type="number" min="0" step="1"
+               value="{{if .Values}}{{index .Values.package_days 0}}{{else}}0{{end}}">
+      </label>
+      <label>
+        <span>Comment <em>(optional)</em></span>
+        <input name="comment" value="{{if .Values}}{{index .Values.comment 0}}{{end}}"
+               placeholder="e.g. customer name, internal id">
+      </label>
+      <div class="actions">
+        <button type="submit">Create</button>
+        <a class="cancel" href="{{.Prefix}}/ui/users/">Cancel</a>
+      </div>
+    </form>
+  </main>
+</body>
+</html>
 {{end}}
-{{define "users_new.html"}}{{template "layout" .}}{{end}}

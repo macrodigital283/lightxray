@@ -1,11 +1,8 @@
-{{- /* Login page — no nav / no host pill, just the form. */ -}}
-{{define "login.html"}}<!doctype html>
+{{define "login"}}<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {{template "_head" .}}
   <title>login — lightxray</title>
-  <link rel="stylesheet" href="{{.Prefix}}/ui/static/style.css">
 </head>
 <body class="login-page">
   <main class="login-card">

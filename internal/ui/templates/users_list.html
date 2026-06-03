@@ -1,39 +1,48 @@
-{{define "title"}}users{{end}}
-{{define "content"}}
-  <h1>Users <span class="badge">{{.Count}}</span></h1>
-  {{if not .Users}}
-    <p class="empty">No users yet. <a href="{{.Prefix}}/ui/users/new">Create one</a>.</p>
-  {{else}}
-    <table class="users">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>UUID</th>
-          <th>Usage</th>
-          <th>Last seen</th>
-          <th>State</th>
-          <th>Comment</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Users}}
-          <tr class="{{if not .Enable}}disabled{{end}}">
-            <td><a href="{{$.Prefix}}/ui/users/{{.UUID}}/">{{.Name}}</a></td>
-            <td><code>{{slice .UUID.String 0 8}}…</code></td>
-            <td>
-              {{gb .UsageBytes}}
-              {{if gt .UsageLimitBytes 0}}<small>/ {{gb .UsageLimitBytes}}</small>{{end}}
-              {{if gt .UsageLimitBytes 0}}
-                <div class="bar"><span style="width:{{pct .UsageBytes .UsageLimitBytes}}%"></span></div>
-              {{end}}
-            </td>
-            <td>{{ago .LastOnline}}</td>
-            <td>{{if .Enable}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}</td>
-            <td class="dim">{{.Comment}}</td>
+{{define "users_list"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>users — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    <h1>Users <span class="badge">{{.Count}}</span></h1>
+    {{if not .Users}}
+      <p class="empty">No users yet. <a href="{{.Prefix}}/ui/users/new">Create one</a>.</p>
+    {{else}}
+      <table class="users">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>UUID</th>
+            <th>Usage</th>
+            <th>Last seen</th>
+            <th>State</th>
+            <th>Comment</th>
           </tr>
-        {{end}}
-      </tbody>
-    </table>
-  {{end}}
+        </thead>
+        <tbody>
+          {{range .Users}}
+            <tr class="{{if not .Enable}}disabled{{end}}">
+              <td><a href="{{$.Prefix}}/ui/users/{{.UUID}}/">{{.Name}}</a></td>
+              <td><code>{{slice .UUID.String 0 8}}…</code></td>
+              <td>
+                {{gb .UsageBytes}}
+                {{if gt .UsageLimitBytes 0}}<small>/ {{gb .UsageLimitBytes}}</small>{{end}}
+                {{if gt .UsageLimitBytes 0}}
+                  <div class="bar"><span style="width:{{pct .UsageBytes .UsageLimitBytes}}%"></span></div>
+                {{end}}
+              </td>
+              <td>{{ago .LastOnline}}</td>
+              <td>{{if .Enable}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}</td>
+              <td class="dim">{{.Comment}}</td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    {{end}}
+  </main>
+</body>
+</html>
 {{end}}
-{{define "users_list.html"}}{{template "layout" .}}{{end}}

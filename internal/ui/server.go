@@ -105,7 +105,7 @@ func (u *UI) render(w http.ResponseWriter, name string, data map[string]any) {
 // still look like the rest of the dashboard.
 func (u *UI) renderError(w http.ResponseWriter, code int, msg string) {
 	w.WriteHeader(code)
-	u.render(w, "error.html", map[string]any{
+	u.render(w, "error_page", map[string]any{
 		"Code":    code,
 		"Message": msg,
 	})

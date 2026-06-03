@@ -20,18 +20,18 @@ func (u *UI) loginForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, u.absURL("/ui/users/"), http.StatusFound)
 		return
 	}
-	u.render(w, "login.html", nil)
+	u.render(w, "login", nil)
 }
 
 // loginSubmit validates the supplied admin UUID and on match sets the
 // session cookie. Wrong UUID re-renders the form with a flash.
 func (u *UI) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		u.render(w, "login.html", map[string]any{"Error": "bad form"})
+		u.render(w, "login", map[string]any{"Error": "bad form"})
 		return
 	}
 	if !u.checkAdminUUID(r.PostFormValue("admin_uuid")) {
-		u.render(w, "login.html", map[string]any{"Error": "Invalid admin UUID."})
+		u.render(w, "login", map[string]any{"Error": "Invalid admin UUID."})
 		return
 	}
 	u.setSessionCookie(w, u.mintSession())
@@ -54,7 +54,7 @@ func (u *UI) usersList(w http.ResponseWriter, r *http.Request) {
 		u.renderError(w, http.StatusInternalServerError, "list users failed")
 		return
 	}
-	u.render(w, "users_list.html", map[string]any{
+	u.render(w, "users_list", map[string]any{
 		"Users": users,
 		"Count": len(users),
 	})
@@ -62,7 +62,7 @@ func (u *UI) usersList(w http.ResponseWriter, r *http.Request) {
 
 // usersNewForm — the create-user form.
 func (u *UI) usersNewForm(w http.ResponseWriter, r *http.Request) {
-	u.render(w, "users_new.html", nil)
+	u.render(w, "users_new", nil)
 }
 
 // usersNewSubmit inserts the user + registers it with xray. On any
@@ -70,12 +70,12 @@ func (u *UI) usersNewForm(w http.ResponseWriter, r *http.Request) {
 // operator doesn't have to redo everything.
 func (u *UI) usersNewSubmit(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		u.render(w, "users_new.html", map[string]any{"Error": "bad form"})
+		u.render(w, "users_new", map[string]any{"Error": "bad form"})
 		return
 	}
 	name := r.PostFormValue("name")
 	if name == "" {
-		u.render(w, "users_new.html", map[string]any{
+		u.render(w, "users_new", map[string]any{
 			"Error":  "Name is required.",
 			"Values": r.PostForm,
 		})
@@ -98,7 +98,7 @@ func (u *UI) usersNewSubmit(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("ui create user", "err", err)
-		u.render(w, "users_new.html", map[string]any{
+		u.render(w, "users_new", map[string]any{
 			"Error":  "Create failed: " + err.Error(),
 			"Values": r.PostForm,
 		})
@@ -109,7 +109,7 @@ func (u *UI) usersNewSubmit(w http.ResponseWriter, r *http.Request) {
 		// end up with a phantom that can't connect.
 		slog.Error("ui create xray AddUser failed — rolling back", "uuid", row.UUID, "err", err)
 		_ = u.store.DeleteUser(r.Context(), row.UUID)
-		u.render(w, "users_new.html", map[string]any{
+		u.render(w, "users_new", map[string]any{
 			"Error":  "xray AddUser failed (rolled back): " + err.Error(),
 			"Values": r.PostForm,
 		})
@@ -140,7 +140,7 @@ func (u *UI) usersDetail(w http.ResponseWriter, r *http.Request) {
 		"/" + user.UUID.String() + "/sub/"
 	// Single decoded VLESS line — useful for paste-into-client.
 	vless := sub.Build(u.cfg, user.UUID.String(), user.Name)
-	u.render(w, "users_detail.html", map[string]any{
+	u.render(w, "users_detail", map[string]any{
 		"User":    user,
 		"SubURL":  subURL,
 		"Bundle":  vless,

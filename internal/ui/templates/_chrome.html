@@ -1,0 +1,27 @@
+{{- /*
+  Shared HTML chrome — header + nav fragments only.
+  We deliberately do NOT use a `{{block "content"}}` layout: html/template
+  namespaces block-defines GLOBALLY, so two files defining `content`
+  would collide (only the last-parsed one wins, and every page would
+  render the same body). Each page renders its own complete <html>…
+  document and just calls {{template "_head" .}} / {{template "_nav" .}}.
+*/ -}}
+{{define "_head"}}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{.Prefix}}/ui/static/style.css">
+{{end}}
+
+{{define "_nav"}}
+<header>
+  <a class="brand" href="{{.Prefix}}/ui/users/">lightxray</a>
+  <span class="host">{{.Host}}</span>
+  <nav>
+    <a href="{{.Prefix}}/ui/users/">users</a>
+    <a href="{{.Prefix}}/ui/users/new">+ new</a>
+    <form method="post" action="{{.Prefix}}/ui/logout" class="inline">
+      <button type="submit" class="link">logout</button>
+    </form>
+  </nav>
+</header>
+{{end}}
