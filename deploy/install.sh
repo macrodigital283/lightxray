@@ -31,6 +31,23 @@ REPO_REF="${REPO_REF:-main}"
 SRC_DIR="${SRC_DIR:-/opt/lightxray-src}"
 RESET="${RESET:-0}"
 
+# Reuse credentials from a prior install if present — re-running install.sh
+# must NOT regenerate the admin UUID / proxy paths / postgres password
+# (the role+DB already exist with the old values; mismatched config →
+# lightxrayd auth-loops on startup). Operator can still force-rotate by
+# passing the var explicitly or running with RESET=1.
+if [[ "$RESET" != "1" && -f /etc/lightxray/config.env ]]; then
+    # shellcheck disable=SC1091
+    source /etc/lightxray/config.env
+    ADMIN_UUID="${ADMIN_UUID:-${LX_ADMIN_UUID:-}}"
+    ADMIN_PROXY_PATH="${ADMIN_PROXY_PATH:-${LX_ADMIN_PROXY_PATH:-}}"
+    CLIENT_PROXY_PATH="${CLIENT_PROXY_PATH:-${LX_CLIENT_PROXY_PATH:-}}"
+    # Extract pg password from existing LX_DATABASE_URL.
+    if [[ -n "${LX_DATABASE_URL:-}" ]]; then
+        PG_PASSWORD="${PG_PASSWORD:-$(printf '%s' "$LX_DATABASE_URL" | sed -E 's|.*lightxray:([^@]+)@.*|\1|')}"
+    fi
+    VLESS_WS_PATH="${VLESS_WS_PATH:-${LX_VLESS_WS_PATH:-/v2ray}}"
+fi
 ADMIN_UUID="${ADMIN_UUID:-$(cat /proc/sys/kernel/random/uuid)}"
 ADMIN_PROXY_PATH="${ADMIN_PROXY_PATH:-$(openssl rand -hex 12)}"
 CLIENT_PROXY_PATH="${CLIENT_PROXY_PATH:-$(openssl rand -hex 12)}"
@@ -71,9 +88,12 @@ fi
 # ── 2. service users ──────────────────────────────────────────────────
 id -u lightxray >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin lightxray
 id -u xray      >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin xray
-mkdir -p /var/log/lightxray /var/log/xray /etc/lightxray /etc/xray /var/www/letsencrypt
+mkdir -p /var/log/lightxray /var/log/xray /etc/lightxray /usr/local/etc/xray /var/www/letsencrypt
 chown lightxray:lightxray /var/log/lightxray
-chown xray:xray /var/log/xray
+# XTLS installer creates /var/log/xray/{access,error}.log owned by
+# nobody:nogroup (its default unit runs as nobody). Our unit runs as
+# `xray`, so reclaim ALL existing files too — not just the dir.
+chown -R xray:xray /var/log/xray
 
 # ── 3. source + build ─────────────────────────────────────────────────
 if [[ -d "$SRC_DIR/.git" ]]; then
@@ -125,9 +145,16 @@ EOF
 chmod 640 /etc/lightxray/config.env
 chown root:lightxray /etc/lightxray/config.env
 
-log "writing /etc/xray/config.json"
+log "writing /usr/local/etc/xray/config.json"
+# The XTLS installer drops a systemd "drop-in" at
+# /etc/systemd/system/xray.service.d/10-donot_touch_single_conf.conf
+# that hard-codes ExecStart to `xray run -config /usr/local/etc/xray/config.json`.
+# It overrides the ExecStart in any unit we install — including ours.
+# Easier to write the config where xray actually reads it than to
+# fight the drop-in.
 sed "s|__LX_VLESS_WS_PATH__|${VLESS_WS_PATH}|g" \
-    "$SRC_DIR/deploy/xray-config.json.tmpl" > /etc/xray/config.json
+    "$SRC_DIR/deploy/xray-config.json.tmpl" > /usr/local/etc/xray/config.json
+chown xray:xray /usr/local/etc/xray/config.json
 
 log "installing systemd units"
 install -m 0644 "$SRC_DIR/deploy/systemd/lightxrayd.service" /etc/systemd/system/
@@ -187,6 +214,24 @@ else
     fi
     nginx -t
     systemctl restart nginx
+
+    # Before invoking certbot, nuke the self-signed stub. certbot refuses
+    # to write into a pre-existing /etc/letsencrypt/live/<domain>/ dir
+    # (errors with "live directory exists for …"), so we detect a stub by
+    # comparing issuer == subject (self-signed) and remove it. Real LE
+    # certs have issuer="Let's Encrypt" which never matches a CN-only
+    # self-signed.
+    if [[ -f $CERT_DIR/fullchain.pem ]]; then
+        STUB_ISSUER=$(openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -issuer 2>/dev/null | sed 's/^issuer=//')
+        STUB_SUBJECT=$(openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -subject 2>/dev/null | sed 's/^subject=//')
+        if [[ "$STUB_ISSUER" == "$STUB_SUBJECT" ]]; then
+            log "removing self-signed stub so certbot can issue a real cert"
+            rm -rf "$CERT_DIR" \
+                   "/etc/letsencrypt/archive/${DOMAIN}" \
+                   "/etc/letsencrypt/renewal/${DOMAIN}.conf"
+        fi
+    fi
+
     log "issuing Let's Encrypt cert"
     certbot certonly --webroot -w /var/www/letsencrypt -d "${DOMAIN}" \
         --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
