@@ -40,16 +40,25 @@ import (
 
 // Client is the gRPC handle to a running xray-core. All public methods
 // are safe to call concurrently — grpc.ClientConn is goroutine-safe.
+//
+// inboundTags is the list of xray VLESS inbound tags that mirror the
+// same user list. Adding a user calls AlterInbound on EACH tag so the
+// user is reachable via every transport (WS, gRPC, Reality) without
+// the operator manually picking which to register.
 type Client struct {
-	conn       *grpc.ClientConn
-	handler    proxymancmd.HandlerServiceClient
-	stats      statscmd.StatsServiceClient
-	inboundTag string
+	conn        *grpc.ClientConn
+	handler     proxymancmd.HandlerServiceClient
+	stats       statscmd.StatsServiceClient
+	inboundTags []string
 }
 
 // Dial opens a plaintext gRPC connection to xray's admin port and verifies
 // it answers by issuing a no-op stats query.
-func Dial(ctx context.Context, addr, inboundTag string) (*Client, error) {
+//
+// inboundTagsCSV is a comma-separated list of inbound tags (e.g.
+// "vless-ws-in,vless-grpc-in,vless-reality-in"). A bare hostname
+// without commas still works — treated as a single-element list.
+func Dial(ctx context.Context, addr, inboundTagsCSV string) (*Client, error) {
 	dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	conn, err := grpc.DialContext(
@@ -60,11 +69,16 @@ func Dial(ctx context.Context, addr, inboundTag string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", addr, err)
 	}
+	tags := splitTags(inboundTagsCSV)
+	if len(tags) == 0 {
+		conn.Close()
+		return nil, fmt.Errorf("no xray inbound tags configured")
+	}
 	c := &Client{
-		conn:       conn,
-		handler:    proxymancmd.NewHandlerServiceClient(conn),
-		stats:      statscmd.NewStatsServiceClient(conn),
-		inboundTag: inboundTag,
+		conn:        conn,
+		handler:     proxymancmd.NewHandlerServiceClient(conn),
+		stats:       statscmd.NewStatsServiceClient(conn),
+		inboundTags: tags,
 	}
 	// Sanity: list zero stats. Returns OK on a healthy xray with the
 	// StatsService enabled.
@@ -112,29 +126,47 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// AddUser registers a VLESS user with xray. Idempotent: if the user
-// already exists xray returns AlreadyExists, which we treat as success.
+// AddUser registers a VLESS user with EVERY configured xray inbound
+// (WS, gRPC, Reality, …). Idempotent per inbound: if the user already
+// exists xray returns AlreadyExists, which we treat as success.
 //
 // The `email` field doubles as the xray stat key — we always set it to
-// the user's UUID string so stat lookups round-trip cleanly.
+// the user's UUID string so stat lookups round-trip cleanly. The same
+// `email` is shared across inbounds; xray namespaces stats by inbound
+// tag internally so there's no collision.
 func (c *Client) AddUser(ctx context.Context, userUUID uuid.UUID) error {
-	op := &proxymancmd.AddUserOperation{
-		User: &protocol.User{
-			Level: 0,
-			Email: userUUID.String(),
-			Account: serial.ToTypedMessage(&vless.Account{
-				Id: userUUID.String(),
-			}),
-		},
+	var lastErr error
+	for _, tag := range c.inboundTags {
+		op := &proxymancmd.AddUserOperation{
+			User: &protocol.User{
+				Level: 0,
+				Email: userUUID.String(),
+				Account: serial.ToTypedMessage(&vless.Account{
+					Id: userUUID.String(),
+				}),
+			},
+		}
+		if err := c.alterWithRetry(ctx, tag, op); err != nil {
+			slog.Warn("xray AddUser", "tag", tag, "uuid", userUUID, "err", err)
+			lastErr = err
+		}
 	}
-	return c.alterWithRetry(ctx, op)
+	return lastErr
 }
 
-// RemoveUser deregisters a VLESS user. NotFound is treated as success
-// (matches the pool's deleteWithRetry expectations).
+// RemoveUser deregisters a VLESS user from EVERY configured inbound.
+// NotFound is treated as success (matches the pool's deleteWithRetry
+// expectations).
 func (c *Client) RemoveUser(ctx context.Context, userUUID uuid.UUID) error {
-	op := &proxymancmd.RemoveUserOperation{Email: userUUID.String()}
-	return c.alterWithRetry(ctx, op)
+	var lastErr error
+	for _, tag := range c.inboundTags {
+		op := &proxymancmd.RemoveUserOperation{Email: userUUID.String()}
+		if err := c.alterWithRetry(ctx, tag, op); err != nil {
+			slog.Warn("xray RemoveUser", "tag", tag, "uuid", userUUID, "err", err)
+			lastErr = err
+		}
+	}
+	return lastErr
 }
 
 // alterWithRetry wraps AlterInbound with the same 3-attempt / 0.8s|1.6s
@@ -142,13 +174,14 @@ func (c *Client) RemoveUser(ctx context.Context, userUUID uuid.UUID) error {
 // AlreadyExists / NotFound which are both terminal-success conditions.
 //
 // op is either *AddUserOperation or *RemoveUserOperation; both satisfy
-// the v2 proto.Message interface ToTypedMessage takes.
-func (c *Client) alterWithRetry(ctx context.Context, op proto.Message) error {
+// the v2 proto.Message interface ToTypedMessage takes. `tag` selects
+// which xray inbound to mutate — caller iterates over inboundTags.
+func (c *Client) alterWithRetry(ctx context.Context, tag string, op proto.Message) error {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		reqctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		_, err := c.handler.AlterInbound(reqctx, &proxymancmd.AlterInboundRequest{
-			Tag:       c.inboundTag,
+			Tag:       tag,
 			Operation: serial.ToTypedMessage(op),
 		})
 		cancel()
@@ -304,4 +337,38 @@ func containsAny(s string, needles ...string) bool {
 		}
 	}
 	return false
+}
+
+// splitTags parses a comma-separated tag list, trimming whitespace and
+// dropping empties. Returns nil for an empty/whitespace-only input so
+// the Dial caller can detect misconfiguration.
+func splitTags(s string) []string {
+	if s == "" {
+		return nil
+	}
+	out := make([]string, 0, 4)
+	cur := ""
+	flush := func() {
+		t := cur
+		// trim
+		for len(t) > 0 && (t[0] == ' ' || t[0] == '\t') {
+			t = t[1:]
+		}
+		for len(t) > 0 && (t[len(t)-1] == ' ' || t[len(t)-1] == '\t') {
+			t = t[:len(t)-1]
+		}
+		if t != "" {
+			out = append(out, t)
+		}
+		cur = ""
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' {
+			flush()
+			continue
+		}
+		cur += string(s[i])
+	}
+	flush()
+	return out
 }

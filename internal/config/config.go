@@ -23,7 +23,7 @@ type Config struct {
 	PublicHost      string // FQDN for subscription URLs
 
 	XrayGRPCAddr   string // 127.0.0.1:10085
-	XrayInboundTag string // matches xray inbound's `tag`
+	XrayInboundTag string // comma-separated inbound tags AddUser/RemoveUser hit; default covers ws+grpc+reality
 
 	ReconcilePeriod time.Duration // how often to poll xray stats
 
@@ -58,7 +58,11 @@ func Load() (Config, error) {
 		ClientProxyPath: os.Getenv("LX_CLIENT_PROXY_PATH"),
 		PublicHost:      os.Getenv("LX_PUBLIC_HOST"),
 		XrayGRPCAddr:    getenv("LX_XRAY_GRPC_ADDR", "127.0.0.1:10085"),
-		XrayInboundTag:  getenv("LX_XRAY_INBOUND_TAG", "vless-ws-in"),
+		// Comma-separated list — AddUser/RemoveUser fan out across all
+		// listed inbounds so the user is reachable via every transport
+		// xray serves. Add/remove tags here to match xray-config.json's
+		// inbound `tag` fields.
+		XrayInboundTag: getenv("LX_XRAY_INBOUND_TAG", "vless-ws-in,vless-grpc-in,vless-reality-in"),
 		ReconcilePeriod: getdur("LX_RECONCILE_PERIOD", 60*time.Second),
 		VLESSPort:       getint("LX_VLESS_PORT", 443),
 		VLESSSNI:        os.Getenv("LX_VLESS_SNI"),
