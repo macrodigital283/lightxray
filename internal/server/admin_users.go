@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/eikhinephyo/lightxray/internal/db"
-	"github.com/eikhinephyo/lightxray/internal/util"
+	"github.com/macrodigital283/lightxray/internal/db"
+	"github.com/macrodigital283/lightxray/internal/util"
 )
 
 // userResponse — JSON shape MUST match Hiddify's HiddifyUser. The pool

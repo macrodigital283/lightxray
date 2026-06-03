@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/eikhinephyo/lightxray/internal/config"
-	"github.com/eikhinephyo/lightxray/internal/db"
-	"github.com/eikhinephyo/lightxray/internal/reconciler"
-	"github.com/eikhinephyo/lightxray/internal/server"
-	"github.com/eikhinephyo/lightxray/internal/xray"
+	"github.com/macrodigital283/lightxray/internal/config"
+	"github.com/macrodigital283/lightxray/internal/db"
+	"github.com/macrodigital283/lightxray/internal/reconciler"
+	"github.com/macrodigital283/lightxray/internal/server"
+	"github.com/macrodigital283/lightxray/internal/xray"
 )
 
 // version is stamped at link time via -ldflags="-X main.version=…".

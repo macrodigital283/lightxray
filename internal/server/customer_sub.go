@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/eikhinephyo/lightxray/internal/db"
-	"github.com/eikhinephyo/lightxray/internal/sub"
+	"github.com/macrodigital283/lightxray/internal/db"
+	"github.com/macrodigital283/lightxray/internal/sub"
 )
 
 // customerSub — GET /{uuid}/sub/  (and /sub64/, /auto/)

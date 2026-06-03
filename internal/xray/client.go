@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/eikhinephyo/lightxray/internal/db"
+	"github.com/macrodigital283/lightxray/internal/db"
 
 	// xray-core's gRPC + proto bindings. serial.ToTypedMessage takes the
 	// v2 proto.Message interface (google.golang.org/protobuf/proto), which

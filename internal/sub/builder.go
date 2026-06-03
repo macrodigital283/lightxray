@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/eikhinephyo/lightxray/internal/config"
+	"github.com/macrodigital283/lightxray/internal/config"
 )
 
 // Build returns the base64 bundle a customer's client will pull from

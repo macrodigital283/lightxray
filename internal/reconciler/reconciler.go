@@ -16,9 +16,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/eikhinephyo/lightxray/internal/config"
-	"github.com/eikhinephyo/lightxray/internal/db"
-	"github.com/eikhinephyo/lightxray/internal/xray"
+	"github.com/macrodigital283/lightxray/internal/config"
+	"github.com/macrodigital283/lightxray/internal/db"
+	"github.com/macrodigital283/lightxray/internal/xray"
 )
 
 type Reconciler struct {

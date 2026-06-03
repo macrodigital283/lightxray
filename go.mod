@@ -1,4 +1,4 @@
-module github.com/eikhinephyo/lightxray
+module github.com/macrodigital283/lightxray
 
 go 1.25
 

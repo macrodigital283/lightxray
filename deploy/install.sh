@@ -26,7 +26,7 @@ set -euo pipefail
 DOMAIN="${DOMAIN:-}"
 [[ -z "$DOMAIN" ]] && { echo "DOMAIN env var required" >&2; exit 1; }
 
-REPO_URL="${REPO_URL:-https://github.com/eikhinephyo/lightxray}"
+REPO_URL="${REPO_URL:-https://github.com/macrodigital283/lightxray}"
 REPO_REF="${REPO_REF:-main}"
 SRC_DIR="${SRC_DIR:-/opt/lightxray-src}"
 RESET="${RESET:-0}"

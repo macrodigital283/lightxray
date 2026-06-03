@@ -11,7 +11,7 @@ xray-core itself is unchanged.
 ## Quick start (Docker, single node)
 
 ```bash
-git clone https://github.com/eikhinephyo/lightxray
+git clone https://github.com/macrodigital283/lightxray
 cd lightxray
 cp .env.example .env
 # Edit .env — at minimum: LX_PUBLIC_HOST, LX_ADMIN_UUID, LX_DATABASE_URL
@@ -21,7 +21,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 ## Production install (Ubuntu, no Docker)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eikhinephyo/lightxray/main/deploy/install.sh \
+curl -fsSL https://raw.githubusercontent.com/macrodigital283/lightxray/main/deploy/install.sh \
   | DOMAIN=node1.example.com bash
 ```
 
