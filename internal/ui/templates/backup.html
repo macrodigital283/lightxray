@@ -1,0 +1,56 @@
+{{define "backup_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>backup — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    <h1>Backup &amp; Restore</h1>
+
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+
+    {{if .Restored}}
+      <section class="card">
+        <h2>Restore complete</h2>
+        <dl class="grid">
+          <dt>Users added</dt>      <dd><strong>{{.Restored.UsersAdded}}</strong></dd>
+          <dt>Users skipped</dt>    <dd>{{.Restored.UsersSkipped}} <small class="dim">(already existed by UUID — restore never overwrites live data)</small></dd>
+          <dt>CDN hosts touched</dt><dd>{{.Restored.HostsTouched}}</dd>
+        </dl>
+        {{if .Restored.Errors}}
+          <p class="dim" style="margin-top:14px">Per-row errors:</p>
+          <pre class="copy">{{range .Restored.Errors}}{{.}}
+{{end}}</pre>
+        {{end}}
+      </section>
+    {{end}}
+
+    <section class="card">
+      <h2>Download backup</h2>
+      <p>JSON export of every user (with usage, expiry, last-connection) and every CDN host.</p>
+      <a class="cancel" href="{{.Prefix}}/ui/backup/export.json">Download JSON</a>
+    </section>
+
+    <section class="card">
+      <h2>Restore from JSON</h2>
+      <p>
+        Non-destructive merge. Users that already exist (by UUID) are skipped — live data is never
+        overwritten. New users are inserted with their original UUID + creation time + usage counter,
+        and enabled ones are automatically registered with xray.
+      </p>
+      <form method="post" action="{{.Prefix}}/ui/backup/restore" enctype="multipart/form-data" class="vstack">
+        <label>
+          <span>Backup JSON file</span>
+          <input type="file" name="backup" accept=".json,application/json" required>
+        </label>
+        <div class="actions">
+          <button type="submit">Restore</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
+{{end}}

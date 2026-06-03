@@ -69,6 +69,9 @@ func (u *UI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /ui/cdn/", u.requireAuth(u.cdnAdd))
 	mux.HandleFunc("POST /ui/cdn/{id}/toggle", u.requireAuth(u.cdnToggle))
 	mux.HandleFunc("POST /ui/cdn/{id}/delete", u.requireAuth(u.cdnDelete))
+	mux.HandleFunc("GET /ui/backup/", u.requireAuth(u.backupPage))
+	mux.HandleFunc("GET /ui/backup/export.json", u.requireAuth(u.backupExport))
+	mux.HandleFunc("POST /ui/backup/restore", u.requireAuth(u.backupRestore))
 
 	// Static — single CSS file. http.FileServer serves the whole subdir
 	// so adding e.g. favicon.ico later just drops in.
@@ -154,6 +157,42 @@ var funcMap = template.FuncMap{
 		}
 		return p
 	},
+	// expiry: computes the expiry date of a user from start_date +
+	// package_days and renders it Hiddify-style:
+	//   unlimited          - package_days == 0
+	//   "—"                - start_date == null (not yet started)
+	//   "2026-07-15"       - normal future expiry
+	//   "2026-06-15 (-3d)" - past expiry (already expired N days ago)
+	//   "2026-07-15 (+12d)" - future expiry (N days remaining)
+	// Returns a struct with parsed text + a "state" hint the template
+	// uses to colour-code the cell (ok/warn/bad/dim).
+	"expiry": func(u db.User) expiryDisplay {
+		if u.PackageDays == 0 {
+			return expiryDisplay{Text: "unlimited", State: "dim"}
+		}
+		if u.StartDate == nil {
+			return expiryDisplay{Text: "—", State: "dim"}
+		}
+		exp := u.StartDate.AddDate(0, 0, u.PackageDays)
+		days := int(time.Until(exp).Hours() / 24)
+		date := exp.Format("2006-01-02")
+		switch {
+		case days < 0:
+			return expiryDisplay{Text: fmt.Sprintf("%s (%dd ago)", date, -days), State: "bad"}
+		case days <= 7:
+			return expiryDisplay{Text: fmt.Sprintf("%s (in %dd)", date, days), State: "warn"}
+		default:
+			return expiryDisplay{Text: fmt.Sprintf("%s (in %dd)", date, days), State: "ok"}
+		}
+	},
+}
+
+// expiryDisplay wraps the rendered expiry string + a colour-class hint
+// so templates can pick "ok" (green) / "warn" (yellow) / "bad" (red) /
+// "dim" (grey for unlimited / not-yet-started).
+type expiryDisplay struct {
+	Text  string
+	State string
 }
 
 // ErrNotImplemented is just a sentinel for stub pages — kept so any

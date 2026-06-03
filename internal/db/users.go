@@ -185,6 +185,64 @@ func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// RestoreUserInput is the shape RestoreUser takes. Unlike CreateUserInput
+// the caller supplies UUID + timestamps (this is a backup-restore path,
+// not a fresh create — we need to preserve identity + creation time).
+type RestoreUserInput struct {
+	UUID            uuid.UUID
+	Name            string
+	Comment         string
+	UsageBytes      int64
+	UsageLimitBytes int64
+	PackageDays     int
+	StartDate       *time.Time
+	LastResetTime   time.Time
+	LastOnline      *time.Time
+	Enable          bool
+	Mode            string
+	Lang            string
+	AddedByUUID     uuid.UUID
+	CreatedAt       time.Time
+}
+
+// RestoreUser inserts a row from a backup, preserving the original UUID.
+// Returns (user, inserted, err) where `inserted` is false when a row with
+// that UUID already exists — restore is non-destructive (never overwrites
+// live data). serial_id is regenerated (the local sequence wins).
+func (s *Store) RestoreUser(ctx context.Context, in RestoreUserInput) (User, bool, error) {
+	if in.Mode == "" {
+		in.Mode = "no_reset"
+	}
+	if in.Lang == "" {
+		in.Lang = "en"
+	}
+	if in.LastResetTime.IsZero() {
+		in.LastResetTime = in.CreatedAt
+	}
+	if in.CreatedAt.IsZero() {
+		in.CreatedAt = time.Now().UTC()
+	}
+	row := s.Pool.QueryRow(ctx, `
+		INSERT INTO users (uuid, name, comment, usage_bytes, usage_limit_bytes,
+		                   package_days, start_date, last_reset_time, last_online,
+		                   enable, mode, lang, added_by_uuid, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		ON CONFLICT (uuid) DO NOTHING
+		RETURNING `+userCols,
+		in.UUID, in.Name, in.Comment, in.UsageBytes, in.UsageLimitBytes,
+		in.PackageDays, in.StartDate, in.LastResetTime, in.LastOnline,
+		in.Enable, in.Mode, in.Lang, in.AddedByUUID, in.CreatedAt,
+	)
+	u, err := scanUser(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, false, nil // conflict — already exists, not an error
+	}
+	if err != nil {
+		return User{}, false, err
+	}
+	return u, true, nil
+}
+
 // CountUsers returns total user count — used by server_status.
 func (s *Store) CountUsers(ctx context.Context) (int64, error) {
 	var n int64

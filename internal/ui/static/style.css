@@ -173,6 +173,12 @@ table.users td small { color: var(--dim); }
 .ok  { color: var(--ok);  background: rgba(63,185,80,0.15); }
 .off { color: var(--bad); background: rgba(248,81,73,0.15); }
 
+/* expiry colour-coding inside table cells / detail dd */
+.exp-ok   { color: var(--ok); }
+.exp-warn { color: var(--warn); }
+.exp-bad  { color: var(--bad); }
+.exp-dim  { color: var(--dim); }
+
 /* ── Forms ────────────────────────────────────────────────────── */
 form.vstack {
   display: flex; flex-direction: column; gap: 14px;
