@@ -39,7 +39,7 @@
                                      {{if gt .User.UsageLimitBytes 0}} / {{gb .User.UsageLimitBytes}}{{end}}</dd>
         <dt>Package days</dt>    <dd>{{if eq .User.PackageDays 0}}unlimited{{else}}{{.User.PackageDays}}{{end}}</dd>
         <dt>Expires</dt>         <dd>{{with expiry .User}}<span class="exp-{{.State}}">{{.Text}}</span>{{end}}</dd>
-        <dt>Last Connection</dt> <dd>{{ago .User.LastOnline}}</dd>
+        <dt>Last Connection</dt> <dd>{{with ago .User.LastOnline}}<span class="conn-{{.State}}">{{.Text}}</span>{{end}}</dd>
         <dt>Created</dt>         <dd>{{.User.CreatedAt.Format "2006-01-02 15:04 MST"}}</dd>
       </dl>
     </section>

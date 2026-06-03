@@ -35,7 +35,7 @@
                   <div class="bar"><span style="width:{{pct .UsageBytes .UsageLimitBytes}}%"></span></div>
                 {{end}}
               </td>
-              <td>{{ago .LastOnline}}</td>
+              <td>{{with ago .LastOnline}}<span class="conn-{{.State}}">{{.Text}}</span>{{end}}</td>
               <td>{{with expiry .}}<span class="exp-{{.State}}">{{.Text}}</span>{{end}}</td>
               <td>{{if .Enable}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}</td>
               <td class="dim">{{.Comment}}</td>

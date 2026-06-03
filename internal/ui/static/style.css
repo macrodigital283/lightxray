@@ -179,6 +179,27 @@ table.users td small { color: var(--dim); }
 .exp-bad  { color: var(--bad); }
 .exp-dim  { color: var(--dim); }
 
+/* Last-Connection state pill */
+.conn-online {
+  color: var(--ok);
+  font-weight: 500;
+  position: relative;
+  padding-left: 14px;
+}
+.conn-online::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+.conn-recent { color: var(--fg); }
+.conn-stale  { color: var(--dim); }
+.conn-never  { color: var(--dim); }
+
 /* ── Forms ────────────────────────────────────────────────────── */
 form.vstack {
   display: flex; flex-direction: column; gap: 14px;

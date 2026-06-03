@@ -125,23 +125,39 @@ var funcMap = template.FuncMap{
 	"gb": func(b int64) string {
 		return fmt.Sprintf("%.2f GB", float64(b)/(1024*1024*1024))
 	},
-	// "ago" formats a *time.Time as a relative duration like "3h 12m ago"
-	// or "—" for nil (never-connected).
-	"ago": func(t *time.Time) string {
+	// "ago" formats a *time.Time as a Last-Connection cell:
+	//   nil               →  "—"        state=never
+	//   < 2 min ago       →  "online"   state=online   (still on a live tick)
+	//   < 60 min ago      →  "Nm ago"   state=recent
+	//   < 24h ago         →  "Nh Nm ago" state=stale
+	//   else              →  "Nd ago"   state=stale
+	//
+	// 2 minutes is the threshold because the reconciler refreshes
+	// last_online every LX_RECONCILE_PERIOD (60s by default) whenever a
+	// user has any byte delta — a 2-minute window covers one full tick
+	// plus a bit of slack and won't flicker the "online" label on a
+	// healthy connection.
+	"ago": func(t *time.Time) onlineDisplay {
 		if t == nil {
-			return "—"
+			return onlineDisplay{Text: "—", State: "never"}
 		}
 		d := time.Since(*t)
-		if d < time.Minute {
-			return "just now"
+		if d < 0 {
+			d = 0 // clock skew between DB and process — treat as just-now
+		}
+		if d < 2*time.Minute {
+			return onlineDisplay{Text: "online", State: "online"}
 		}
 		if d < time.Hour {
-			return fmt.Sprintf("%dm ago", int(d.Minutes()))
+			return onlineDisplay{Text: fmt.Sprintf("%dm ago", int(d.Minutes())), State: "recent"}
 		}
 		if d < 24*time.Hour {
-			return fmt.Sprintf("%dh %dm ago", int(d.Hours()), int(d.Minutes())%60)
+			return onlineDisplay{
+				Text:  fmt.Sprintf("%dh %dm ago", int(d.Hours()), int(d.Minutes())%60),
+				State: "stale",
+			}
 		}
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+		return onlineDisplay{Text: fmt.Sprintf("%dd ago", int(d.Hours()/24)), State: "stale"}
 	},
 	// pct: percent of usage_bytes / usage_limit_bytes, clamped 0-100.
 	"pct": func(used, limit int64) int {
@@ -191,6 +207,14 @@ var funcMap = template.FuncMap{
 // so templates can pick "ok" (green) / "warn" (yellow) / "bad" (red) /
 // "dim" (grey for unlimited / not-yet-started).
 type expiryDisplay struct {
+	Text  string
+	State string
+}
+
+// onlineDisplay is the structured "Last Connection" cell. State maps to
+// a `conn-{online,recent,stale,never}` CSS class so the template can
+// colour-code at a glance.
+type onlineDisplay struct {
 	Text  string
 	State string
 }
