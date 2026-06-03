@@ -14,13 +14,13 @@
 
     <section class="card">
       <h2>Subscription URLs</h2>
-      <p class="sub-label">V2Ray Client <small>(v2rayN, v2rayNG, Streisand, …)</small></p>
+      <p class="sub-label">Auto <small>(works for both V2Ray and Clash families — detects client by User-Agent)</small></p>
       <pre class="copy">{{.URLAuto}}</pre>
 
-      <p class="sub-label">Universal <small>(base64; older V2Ray apps that don't auto-detect)</small></p>
+      <p class="sub-label">V2Ray (base64) <small>(force base64 VLESS — for older V2Ray apps)</small></p>
       <pre class="copy">{{.URLSub}}</pre>
 
-      <p class="sub-label">Clash Meta <small>(Clash Meta, Stash, mihomo party)</small></p>
+      <p class="sub-label">Clash Meta (YAML) <small>(force YAML profile)</small></p>
       <pre class="copy">{{.URLClashMeta}}</pre>
 
       <details>

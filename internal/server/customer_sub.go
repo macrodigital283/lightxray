@@ -3,17 +3,17 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/macrodigital283/lightxray/internal/db"
 	"github.com/macrodigital283/lightxray/internal/sub"
 )
 
-// customerSub — GET /sub/{uuid}, /sub64/{uuid}, /auto/{uuid}
+// customerSub — GET /sub/{uuid}, /sub64/{uuid}
 //
-// Public-by-UUID endpoint a customer's V2Ray client polls. Returns a
-// base64-encoded vless:// bundle for that user. /auto/ technically
-// negotiates by User-Agent in Hiddify; we always emit base64 because
-// every modern V2Ray client accepts it.
+// Universal base64-encoded VLESS bundle. Always emits the V2Ray format
+// regardless of User-Agent; this is the URL to hand to clients that
+// don't auto-detect (older v2rayN/v2rayNG builds, Streisand, …).
 //
 // Disabled or unknown users get 404 (matches Hiddify — neither leaks
 // whether a uuid exists vs. is just turned off).
@@ -27,6 +27,51 @@ func (d Deps) customerSub(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
 	_, _ = w.Write([]byte(body))
+}
+
+// customerAuto — GET /auto/{uuid}
+//
+// Hiddify's "auto-detect by User-Agent" endpoint. We mirror that
+// behaviour so the same /auto/ URL works whether the customer pastes it
+// into a Clash-family client (returns YAML) or a V2Ray-family one
+// (returns base64 VLESS). Without UA detection here, the Clash client
+// just gets a base64 blob it can't parse — exactly the bug we hit.
+func (d Deps) customerAuto(w http.ResponseWriter, r *http.Request) {
+	u, ok := d.subLookup(w, r)
+	if !ok {
+		return
+	}
+	if isClashUA(r.Header.Get("User-Agent")) {
+		body := sub.BuildClashMeta(d.cfg, u.UUID.String(), u.Name)
+		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+		w.Header().Set("Profile-Update-Interval", "12")
+		w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
+		_, _ = w.Write([]byte(body))
+		return
+	}
+	// default = V2Ray base64
+	body := sub.Build(d.cfg, u.UUID.String(), u.Name)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Profile-Update-Interval", "12")
+	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
+	_, _ = w.Write([]byte(body))
+}
+
+// isClashUA returns true when the User-Agent string looks like a
+// Clash-family subscription fetch. Covers: Clash, Clash.Meta,
+// ClashForWindows, Clash Verge, ClashX/ClashX Meta, Mihomo, Stash,
+// FlClash. Case-insensitive substring match — UA strings vary a lot
+// across versions; matching loosely is OK because the cost of a false
+// positive here is "Clash-likely UA gets YAML" which is what we'd want
+// for any reasonable client containing those tokens.
+func isClashUA(ua string) bool {
+	ua = strings.ToLower(ua)
+	if ua == "" {
+		return false
+	}
+	return strings.Contains(ua, "clash") ||
+		strings.Contains(ua, "mihomo") ||
+		strings.Contains(ua, "stash")
 }
 
 // customerClashMeta — GET /clashmeta/{uuid}

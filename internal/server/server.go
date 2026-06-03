@@ -52,7 +52,7 @@ func New(cfg config.Config, store *db.Store, xc *xray.Client, version string) ht
 	// matching client family.
 	mux.HandleFunc("GET /sub/{uuid}",       d.customerSub)        // base64 VLESS bundle
 	mux.HandleFunc("GET /sub64/{uuid}",     d.customerSub)        // alias of /sub/
-	mux.HandleFunc("GET /auto/{uuid}",      d.customerSub)        // Hiddify auto = base64
+	mux.HandleFunc("GET /auto/{uuid}",      d.customerAuto)       // UA-detect: V2Ray base64 OR Clash YAML
 	mux.HandleFunc("GET /clashmeta/{uuid}", d.customerClashMeta)  // Clash Meta YAML
 
 	// ── dashboard ─────────────────────────────────────────────────────
