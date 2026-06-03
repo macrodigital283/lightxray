@@ -136,13 +136,28 @@ systemctl daemon-reload
 
 # ── 6. nginx + TLS ────────────────────────────────────────────────────
 log "writing nginx vhost"
+# Detect the layout: Debian/Ubuntu nginx uses sites-available/sites-enabled,
+# upstream nginx.org packages drop everything in conf.d/. Support both.
+if [[ -d /etc/nginx/sites-available && -d /etc/nginx/sites-enabled ]]; then
+    NGINX_CONF="/etc/nginx/sites-available/lightxray-${DOMAIN}.conf"
+    NGINX_LINK="/etc/nginx/sites-enabled/lightxray-${DOMAIN}.conf"
+else
+    mkdir -p /etc/nginx/conf.d
+    NGINX_CONF="/etc/nginx/conf.d/lightxray-${DOMAIN}.conf"
+    NGINX_LINK=""
+    # nginx.org's default.conf binds :80 on _ and would shadow our LE
+    # challenge route. Push it aside.
+    if [[ -f /etc/nginx/conf.d/default.conf ]]; then
+        mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.disabled-by-lightxray
+    fi
+fi
 sed -e "s|__LX_DOMAIN__|${DOMAIN}|g" \
     -e "s|__LX_ADMIN_PROXY_PATH__|${ADMIN_PROXY_PATH}|g" \
     -e "s|__LX_CLIENT_PROXY_PATH__|${CLIENT_PROXY_PATH}|g" \
     -e "s|__LX_VLESS_WS_PATH__|${VLESS_WS_PATH}|g" \
     "$SRC_DIR/deploy/nginx/lightxray.conf.tmpl" \
-    > /etc/nginx/sites-available/lightxray-${DOMAIN}.conf
-ln -sf /etc/nginx/sites-available/lightxray-${DOMAIN}.conf /etc/nginx/sites-enabled/
+    > "$NGINX_CONF"
+[[ -n "$NGINX_LINK" ]] && ln -sf "$NGINX_CONF" "$NGINX_LINK"
 
 # Cert provisioning.
 # ── Mode A (default): Let's Encrypt via certbot --webroot (HTTP-01).
