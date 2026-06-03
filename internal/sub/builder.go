@@ -36,7 +36,11 @@ func vlessWSTLS(cfg config.Config, userUUID, displayName string) string {
 	q.Set("encryption", "none")
 	q.Set("host", cfg.VLESSSNI)
 	q.Set("sni", cfg.VLESSSNI)
-	q.Set("path", cfg.VLESSWSPath)
+	// The WS path must include the client proxy path + user uuid so that
+	// nginx's regex location (which matches /<client>/<uuid><ws_path>)
+	// routes it to xray. nginx rewrites it back to bare <ws_path> before
+	// proxying so xray's WS inbound (configured with that exact path) accepts.
+	q.Set("path", "/"+cfg.ClientProxyPath+"/"+userUUID+cfg.VLESSWSPath)
 	if cfg.VLESSAlpn != "" {
 		q.Set("alpn", cfg.VLESSAlpn)
 	}

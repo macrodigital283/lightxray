@@ -75,11 +75,14 @@ server {
         proxy_set_header Host $host;
     }
 
-    # --- xray VLESS+WS data plane: client connects to .../<client>/<uuid><ws-path> ---
-    # We accept the path under the client proxy AND the bare ws-path; the
-    # bare form lets browsers / probes hit it directly when needed for
-    # debugging. xray ignores the path component beyond what's configured.
+    # --- xray VLESS+WS data plane: client connects to /<client>/<uuid><ws-path> ---
+    # The vless:// link embeds that full path in its `path` query param so
+    # each user's WS URL is unique and includes the secret client_proxy
+    # token. Before forwarding to xray we REWRITE the URI back to the
+    # bare <ws-path>; xray's WS inbound is configured for that exact
+    # path, so any prefix would 404 inside xray.
     location ~ "^/__LX_CLIENT_PROXY_PATH__/[a-f0-9-]{36}__LX_VLESS_WS_PATH__$" {
+        rewrite ^.+$ __LX_VLESS_WS_PATH__ break;
         proxy_pass http://127.0.0.1:10000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
