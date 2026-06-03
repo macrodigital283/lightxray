@@ -177,7 +177,7 @@ if [[ -n "${ORIGIN_CERT_FILE:-}" && -n "${ORIGIN_KEY_FILE:-}" ]]; then
     install -m 0644 "$ORIGIN_CERT_FILE" "$CERT_DIR/fullchain.pem"
     install -m 0600 "$ORIGIN_KEY_FILE"  "$CERT_DIR/privkey.pem"
     nginx -t
-    systemctl reload nginx
+    systemctl restart nginx
 else
     # Stub self-signed first so `nginx -t` passes before certbot runs.
     if [[ ! -f $CERT_DIR/fullchain.pem ]]; then
@@ -186,11 +186,11 @@ else
             -subj "/CN=${DOMAIN}" >/dev/null 2>&1
     fi
     nginx -t
-    systemctl reload nginx
+    systemctl restart nginx
     log "issuing Let's Encrypt cert"
     certbot certonly --webroot -w /var/www/letsencrypt -d "${DOMAIN}" \
         --non-interactive --agree-tos --register-unsafely-without-email --keep-until-expiring
-    systemctl reload nginx
+    systemctl restart nginx
 fi
 
 # ── 7. start services ────────────────────────────────────────────────
