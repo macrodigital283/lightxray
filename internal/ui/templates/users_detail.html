@@ -13,12 +13,19 @@
     </h1>
 
     <section class="card">
-      <h2>Subscription</h2>
-      <p>Paste this URL into a V2Ray client (v2rayN, v2rayNG, Streisand, …):</p>
-      <pre class="copy">{{.SubURL}}</pre>
+      <h2>Subscription URLs</h2>
+      <p class="sub-label">V2Ray Client <small>(v2rayN, v2rayNG, Streisand, …)</small></p>
+      <pre class="copy">{{.URLAuto}}</pre>
+
+      <p class="sub-label">Universal <small>(base64; older V2Ray apps that don't auto-detect)</small></p>
+      <pre class="copy">{{.URLSub}}</pre>
+
+      <p class="sub-label">Clash Meta <small>(Clash Meta, Stash, mihomo party)</small></p>
+      <pre class="copy">{{.URLClashMeta}}</pre>
+
       <details>
         <summary>Show decoded VLESS link</summary>
-        <pre class="copy">{{.Bundle}}</pre>
+        <pre class="copy">{{.VLESSLink}}</pre>
       </details>
     </section>
 

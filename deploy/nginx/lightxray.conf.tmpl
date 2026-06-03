@@ -64,12 +64,14 @@ server {
     }
 
     # --- client sub: rewrite /<client>/<uuid>/<format>/  →  /<format>/<uuid> ---
-    # We move the format (sub|sub64|auto) literal to the front so the Go
-    # mux's customer-sub route has a static first segment and doesn't
-    # conflict with the dashboard's /ui/ prefix. Also: regex is
+    # Each format goes to a different lightxrayd handler:
+    #   sub / sub64 / auto  →  base64 VLESS bundle (V2Ray family)
+    #   clashmeta           →  Clash Meta YAML (Clash family)
+    # The literal format goes first in the rewritten URL so the Go mux's
+    # static prefix wins (no overlap with /ui/* etc). Regex is
     # double-quoted because nginx treats bare `{` as a block opener.
-    location ~ "^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]{36})/(sub|sub64|auto)/?$" {
-        rewrite ^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]+)/(sub|sub64|auto)/?$ /$2/$1 break;
+    location ~ "^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]{36})/(sub|sub64|auto|clashmeta)/?$" {
+        rewrite ^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]+)/(sub|sub64|auto|clashmeta)/?$ /$2/$1 break;
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

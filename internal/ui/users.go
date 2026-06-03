@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -118,8 +120,16 @@ func (u *UI) usersNewSubmit(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.absURL("/ui/users/"+row.UUID.String()+"/"), http.StatusFound)
 }
 
-// usersDetail — single-user page. Shows the subscription URL prominently
-// since that's what the operator most often needs to copy out.
+// usersDetail — single-user page. Shows three Hiddify-style subscription
+// URLs so operators can hand the right one to each client family:
+//
+//	/auto/       → V2Ray (v2rayN, v2rayNG, Streisand, …)
+//	/sub/        → base64 fallback for older V2Ray apps
+//	/clashmeta/  → Clash Meta / Stash / mihomo (YAML profile)
+//
+// URL shape matches Hiddify exactly — ?asn=unknown query param + #<name>
+// fragment — so any client UI that already expects that shape labels the
+// connection identically.
 func (u *UI) usersDetail(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("uuid"))
 	if err != nil {
@@ -136,14 +146,27 @@ func (u *UI) usersDetail(w http.ResponseWriter, r *http.Request) {
 		u.renderError(w, http.StatusInternalServerError, "lookup failed")
 		return
 	}
-	subURL := "https://" + u.cfg.PublicHost + "/" + u.cfg.ClientProxyPath +
-		"/" + user.UUID.String() + "/sub/"
-	// Single decoded VLESS line — useful for paste-into-client.
-	vless := sub.Build(u.cfg, user.UUID.String(), user.Name)
+	base := "https://" + u.cfg.PublicHost + "/" + u.cfg.ClientProxyPath +
+		"/" + user.UUID.String()
+	frag := "#" + url.PathEscape(user.Name)
+
+	// Decoded VLESS line for clients that accept the raw URI directly.
+	vlessLink := ""
+	if decoded, err := base64.StdEncoding.DecodeString(sub.Build(u.cfg, user.UUID.String(), user.Name)); err == nil {
+		// Build() appends a trailing newline before encoding — trim it.
+		s := string(decoded)
+		for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
+			s = s[:len(s)-1]
+		}
+		vlessLink = s
+	}
+
 	u.render(w, "users_detail", map[string]any{
-		"User":    user,
-		"SubURL":  subURL,
-		"Bundle":  vless,
+		"User":         user,
+		"URLAuto":      base + "/auto/?asn=unknown" + frag,
+		"URLSub":       base + "/sub/?asn=unknown" + frag,
+		"URLClashMeta": base + "/clashmeta/?asn=unknown" + frag,
+		"VLESSLink":    vlessLink,
 	})
 }
 

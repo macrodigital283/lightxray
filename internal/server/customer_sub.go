@@ -8,36 +8,64 @@ import (
 	"github.com/macrodigital283/lightxray/internal/sub"
 )
 
-// customerSub — GET /{uuid}/sub/  (and /sub64/, /auto/)
+// customerSub — GET /sub/{uuid}, /sub64/{uuid}, /auto/{uuid}
 //
-// Public-by-UUID endpoint the customer's V2Ray client polls. Returns the
-// base64-encoded vless:// bundle for that user. Disabled or unknown
-// users get 404 (matches Hiddify, which also returns 404).
+// Public-by-UUID endpoint a customer's V2Ray client polls. Returns a
+// base64-encoded vless:// bundle for that user. /auto/ technically
+// negotiates by User-Agent in Hiddify; we always emit base64 because
+// every modern V2Ray client accepts it.
+//
+// Disabled or unknown users get 404 (matches Hiddify — neither leaks
+// whether a uuid exists vs. is just turned off).
 func (d Deps) customerSub(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathUUID(r, "uuid", w)
+	u, ok := d.subLookup(w, r)
 	if !ok {
 		return
 	}
+	body := sub.Build(d.cfg, u.UUID.String(), u.Name)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Profile-Update-Interval", "12")
+	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
+	_, _ = w.Write([]byte(body))
+}
 
+// customerClashMeta — GET /clashmeta/{uuid}
+//
+// Returns a Clash Meta (mihomo) YAML profile. Clash-family clients
+// (Clash Meta, Stash, ClashX Meta, mihomo party) consume this URL
+// directly as a "subscription".
+func (d Deps) customerClashMeta(w http.ResponseWriter, r *http.Request) {
+	u, ok := d.subLookup(w, r)
+	if !ok {
+		return
+	}
+	body := sub.BuildClashMeta(d.cfg, u.UUID.String(), u.Name)
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	w.Header().Set("Profile-Update-Interval", "12")
+	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
+	_, _ = w.Write([]byte(body))
+}
+
+// subLookup centralises the auth/404 logic shared by every customer
+// subscription endpoint. Returns the user row + ok=true on success;
+// writes the response itself on failure and returns ok=false.
+func (d Deps) subLookup(w http.ResponseWriter, r *http.Request) (db.User, bool) {
+	id, ok := pathUUID(r, "uuid", w)
+	if !ok {
+		return db.User{}, false
+	}
 	ctx, cancel := reqCtx(r)
 	defer cancel()
 	u, err := d.store.GetUser(ctx, id)
 	if errors.Is(err, db.ErrNotFound) || (err == nil && !u.Enable) {
-		// Don't disclose whether the user exists; treat both as 404.
 		http.NotFound(w, r)
-		return
+		return db.User{}, false
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "subscription lookup failed")
-		return
+		return db.User{}, false
 	}
-
-	body := sub.Build(d.cfg, u.UUID.String(), u.Name)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	// Profile-update hints honoured by v2rayN/v2rayNG.
-	w.Header().Set("Profile-Update-Interval", "12")
-	w.Header().Set("Subscription-Userinfo", subscriptionUserinfo(u))
-	_, _ = w.Write([]byte(body))
+	return u, true
 }
 
 // subscriptionUserinfo formats the standard Subscription-Userinfo header
