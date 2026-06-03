@@ -25,6 +25,17 @@
     }
   },
 
+  "_comment_topology": [
+    "All inbounds bind to 127.0.0.1 — nothing is exposed publicly. The",
+    "public :443 socket belongs to nginx's stream router, which peeks the",
+    "TLS SNI and forwards: <reality_target> → vless-reality-in (7443),",
+    "everything else → nginx http (8443) which terminates TLS and routes",
+    "WS / sub / admin by path. So CDN hostnames added later in the",
+    "dashboard need no nginx change — they hit the stream default route.",
+    "google/gstatic pinned to direct so the generate_204 latency probe",
+    "always works (it's mis-categorized under geosite:cn in the geo db)."
+  ],
+
   "inbounds": [
     {
       "tag":      "api-in",
@@ -76,8 +87,8 @@
     },
     {
       "tag":      "vless-reality-in",
-      "listen":   "0.0.0.0",
-      "port":     __LX_REALITY_PORT__,
+      "listen":   "127.0.0.1",
+      "port":     7443,
       "protocol": "vless",
       "settings": {
         "clients":    [],
@@ -107,21 +118,12 @@
     { "tag": "blocked", "protocol": "blackhole",   "settings": {} }
   ],
 
-  "_comment_routing": [
-    "google/gstatic ALWAYS direct, evaluated first. The client latency",
-    "probe (http://www.gstatic.com/generate_204) must reach Google or",
-    "clients show n/a even when the proxy works. gstatic is mis-categorized",
-    "under geosite:cn in the geo db, so any FUTURE geosite:cn block we might",
-    "add would eat it — this rule runs before any such block could.",
-    "(Top-level _comment_ keys are ignored by xray; comments inside the",
-    "rules array are NOT — bare strings there break the parser.)"
-  ],
   "routing": {
     "rules": [
       { "type": "field", "inboundTag": ["api-in"], "outboundTag": "api" },
       { "type": "field", "outboundTag": "direct",
         "domain": ["geosite:google", "domain:gstatic.com", "domain:gvt1.com", "domain:gvt2.com"] },
-      { "type": "field", "ip": ["geoip:private"],  "outboundTag": "blocked" }
+      { "type": "field", "ip": ["geoip:private"], "outboundTag": "blocked" }
     ]
   }
 }
