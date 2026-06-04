@@ -248,6 +248,36 @@ func (u *UI) usersToggle(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.absURL("/ui/users/"+id.String()+"/"), http.StatusFound)
 }
 
+// currentExpiry renders a user's computed expiry as YYYY-MM-DD, or "" when
+// the user is unlimited (package_days == 0) or hasn't started (start_date
+// null) — neither of which has an absolute date.
+func currentExpiry(user db.User) string {
+	if user.PackageDays == 0 || user.StartDate == nil {
+		return ""
+	}
+	return user.StartDate.AddDate(0, 0, user.PackageDays).Format("2006-01-02")
+}
+
+// editData is the template payload for the edit form. ExpiryValue pre-fills
+// the date input, but only when the expiry is today-or-later — a past date
+// would violate the input's min and block submission. The current expiry is
+// still shown in help text regardless, via CurrentExpiry.
+func editData(user db.User, errMsg string) map[string]any {
+	today := time.Now().UTC().Format("2006-01-02")
+	cur := currentExpiry(user)
+	val := cur
+	if cur != "" && cur < today {
+		val = ""
+	}
+	return map[string]any{
+		"User":          user,
+		"CurrentExpiry": cur,
+		"ExpiryValue":   val,
+		"Today":         today,
+		"Error":         errMsg,
+	}
+}
+
 // usersEditForm — GET /ui/users/<uuid>/edit. Pre-fills the edit form.
 func (u *UI) usersEditForm(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("uuid"))
@@ -265,7 +295,7 @@ func (u *UI) usersEditForm(w http.ResponseWriter, r *http.Request) {
 		u.renderError(w, http.StatusInternalServerError, "lookup failed")
 		return
 	}
-	u.render(w, "users_edit", map[string]any{"User": user})
+	u.render(w, "users_edit", editData(user, ""))
 }
 
 // usersEditSubmit — POST /ui/users/<uuid>/edit. Applies a partial update
@@ -287,12 +317,12 @@ func (u *UI) usersEditSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		u.render(w, "users_edit", map[string]any{"User": current, "Error": "bad form"})
+		u.render(w, "users_edit", editData(current, "bad form"))
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	if name == "" {
-		u.render(w, "users_edit", map[string]any{"User": current, "Error": "Name is required."})
+		u.render(w, "users_edit", editData(current, "Name is required."))
 		return
 	}
 	comment := r.PostFormValue("comment")
@@ -301,15 +331,42 @@ func (u *UI) usersEditSubmit(w http.ResponseWriter, r *http.Request) {
 	enable := r.PostFormValue("enable") == "on"
 	limitBytes := util.GBToBytes(limitGB)
 
-	if _, err := u.store.PatchUser(r.Context(), id, db.PatchUserInput{
+	patch := db.PatchUserInput{
 		Name:            &name,
 		Comment:         &comment,
 		UsageLimitBytes: &limitBytes,
-		PackageDays:     &pkgDays,
 		Enable:          &enable,
-	}); err != nil {
+	}
+
+	// An explicit "Expires on" date overrides package days. Translate it
+	// into the start_date + package_days model so the computed expiry lands
+	// exactly on the chosen date: keep the existing start_date when set (no
+	// drift) and derive package_days from it; only anchor start_date to
+	// today when the user never started. A blank date falls back to the
+	// package_days field.
+	if expStr := strings.TrimSpace(r.PostFormValue("expires_at")); expStr != "" {
+		exp, perr := time.Parse("2006-01-02", expStr)
+		if perr != nil {
+			u.render(w, "users_edit", editData(current, "Invalid expiry date."))
+			return
+		}
+		anchor := current.StartDate
+		if anchor == nil {
+			today := time.Now().UTC().Truncate(24 * time.Hour)
+			patch.StartDate = &today
+			anchor = &today
+		}
+		days := int(exp.Sub(anchor.UTC().Truncate(24*time.Hour)).Hours() / 24)
+		if days < 0 {
+			days = 0
+		}
+		pkgDays = days
+	}
+	patch.PackageDays = &pkgDays
+
+	if _, err := u.store.PatchUser(r.Context(), id, patch); err != nil {
 		slog.Error("ui edit user", "err", err)
-		u.render(w, "users_edit", map[string]any{"User": current, "Error": "Save failed: " + err.Error()})
+		u.render(w, "users_edit", editData(current, "Save failed: "+err.Error()))
 		return
 	}
 

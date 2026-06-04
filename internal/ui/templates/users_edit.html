@@ -19,8 +19,12 @@
         <input name="usage_limit_GB" type="number" min="0" step="0.1" value="{{gbinput .User.UsageLimitBytes}}">
       </label>
       <label>
-        <span>Package days <em>— 0 = unlimited</em></span>
+        <span>Package days <em>— 0 = unlimited, counts from first connect</em></span>
         <input name="package_days" type="number" min="0" step="1" value="{{.User.PackageDays}}">
+      </label>
+      <label>
+        <span>Expires on <em>— exact end date; overrides package days{{if .CurrentExpiry}} (now {{.CurrentExpiry}}){{end}}. Blank = use package days.</em></span>
+        <input name="expires_at" type="date" min="{{.Today}}" value="{{.ExpiryValue}}">
       </label>
       <label>
         <span>Comment <em>(optional)</em></span>

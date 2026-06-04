@@ -148,6 +148,7 @@ type PatchUserInput struct {
 	Comment         *string
 	UsageLimitBytes *int64
 	PackageDays     *int
+	StartDate       *time.Time // re-anchor the expiry clock (DATE column)
 	Enable          *bool
 	Mode            *string
 	Lang            *string
@@ -175,6 +176,13 @@ func (s *Store) PatchUser(ctx context.Context, id uuid.UUID, in PatchUserInput) 
 	}
 	if in.PackageDays != nil {
 		addSet("package_days", *in.PackageDays)
+	}
+	if in.StartDate != nil {
+		// start_date is a DATE column; pass the date as a string + cast so
+		// pgx doesn't try to bind it as timestamptz (avoids type-inference
+		// surprises, like the 42P08 TouchLastOnline hit).
+		args = append(args, in.StartDate.UTC().Format("2006-01-02"))
+		sets = append(sets, fmt.Sprintf("start_date = $%d::date", len(args)))
 	}
 	if in.Enable != nil {
 		addSet("enable", *in.Enable)
