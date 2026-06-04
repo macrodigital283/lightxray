@@ -282,6 +282,18 @@ func (s *Store) CountEnabledUsers(ctx context.Context) (int64, error) {
 	return n, err
 }
 
+// CountOnlineUsers counts users whose last_online is newer than `since`.
+// The dashboard passes a 2-minute cutoff — the same window the user table's
+// "online" pill uses — so the header figure and the per-row dots agree.
+func (s *Store) CountOnlineUsers(ctx context.Context, since time.Time) (int64, error) {
+	var n int64
+	err := s.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM users WHERE last_online IS NOT NULL AND last_online > $1`,
+		since,
+	).Scan(&n)
+	return n, err
+}
+
 // UserExists is a cheap presence check used by the reconciler to skip
 // UUIDs xray still has stats for but we've deleted from the DB. Without
 // this, deleted-user ghosts would inflate the `online` count and emit

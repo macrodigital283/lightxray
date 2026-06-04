@@ -280,3 +280,80 @@ body.login-page {
 .login-card .host { display: block; margin-bottom: 24px; color: var(--dim); font-size: 13px; }
 .login-card form { text-align: left; display: flex; flex-direction: column; gap: 14px; }
 .login-card button { width: 100%; padding: 10px; }
+
+/* ── Dashboard stats bar ──────────────────────────────────────── */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: -8px 0 22px;
+}
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  min-width: 130px;
+}
+.stat-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--dim);
+  margin-bottom: 5px;
+}
+.stat-value { font-size: 18px; font-weight: 600; }
+.stat-value small { font-size: 11px; color: var(--dim); font-weight: 400; }
+.dot-online {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+  margin-right: 7px;
+  vertical-align: middle;
+}
+
+/* ── Bulk-select toolbar + checkboxes ─────────────────────────── */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.selected-count { font-size: 12.5px; }
+button.small { padding: 5px 12px; font-size: 12.5px; }
+table.users th.check, table.users td.check {
+  width: 30px;
+  text-align: center;
+  padding-left: 12px;
+  padding-right: 0;
+}
+input[type="checkbox"] {
+  width: 15px; height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+}
+a.edit-link { color: var(--accent); font-size: 12.5px; }
+
+/* ── Edit button (detail) + checkbox label (edit form) ────────── */
+a.btn-edit {
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: 500;
+  display: inline-block;
+}
+a.btn-edit:hover { filter: brightness(1.1); text-decoration: none; }
+label.checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+label.checkbox > span { margin: 0; color: var(--fg); }
+label.checkbox input[type="checkbox"] { width: 16px; height: 16px; }
+.hint { font-size: 12.5px; margin-top: 16px; }

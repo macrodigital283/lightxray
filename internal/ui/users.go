@@ -7,11 +7,14 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/macrodigital283/lightxray/internal/db"
 	"github.com/macrodigital283/lightxray/internal/sub"
+	"github.com/macrodigital283/lightxray/internal/sysstat"
 	"github.com/macrodigital283/lightxray/internal/util"
 )
 
@@ -49,6 +52,10 @@ func (u *UI) logout(w http.ResponseWriter, r *http.Request) {
 // usersList — the main dashboard. Shows the full user table plus a
 // total row at the bottom so the operator can eyeball the user count
 // without counting rows.
+// onlineWindow is how recently a user must have transferred bytes to count
+// as "online" — matches the user table's "online" pill (see funcMap "ago").
+const onlineWindow = 2 * time.Minute
+
 func (u *UI) usersList(w http.ResponseWriter, r *http.Request) {
 	users, err := u.store.ListUsers(r.Context())
 	if err != nil {
@@ -56,9 +63,15 @@ func (u *UI) usersList(w http.ResponseWriter, r *http.Request) {
 		u.renderError(w, http.StatusInternalServerError, "list users failed")
 		return
 	}
+	online, err := u.store.CountOnlineUsers(r.Context(), time.Now().Add(-onlineWindow))
+	if err != nil {
+		slog.Warn("ui users online count", "err", err)
+	}
 	u.render(w, "users_list", map[string]any{
-		"Users": users,
-		"Count": len(users),
+		"Users":  users,
+		"Count":  len(users),
+		"Online": online,
+		"Stats":  sysstat.Sample("/"),
 	})
 }
 
@@ -233,4 +246,112 @@ func (u *UI) usersToggle(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("ui toggle xray sync", "uuid", id, "want", want, "err", xerr)
 	}
 	http.Redirect(w, r, u.absURL("/ui/users/"+id.String()+"/"), http.StatusFound)
+}
+
+// usersEditForm — GET /ui/users/<uuid>/edit. Pre-fills the edit form.
+func (u *UI) usersEditForm(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("uuid"))
+	if err != nil {
+		u.renderError(w, http.StatusBadRequest, "invalid uuid")
+		return
+	}
+	user, err := u.store.GetUser(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		u.renderError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		slog.Error("ui edit form get", "err", err)
+		u.renderError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
+	u.render(w, "users_edit", map[string]any{"User": user})
+}
+
+// usersEditSubmit — POST /ui/users/<uuid>/edit. Applies a partial update
+// (name, comment, usage limit, package days, enabled) and syncs xray when
+// the enabled state flips.
+func (u *UI) usersEditSubmit(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("uuid"))
+	if err != nil {
+		u.renderError(w, http.StatusBadRequest, "invalid uuid")
+		return
+	}
+	current, err := u.store.GetUser(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		u.renderError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		u.renderError(w, http.StatusInternalServerError, "lookup failed")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		u.render(w, "users_edit", map[string]any{"User": current, "Error": "bad form"})
+		return
+	}
+	name := strings.TrimSpace(r.PostFormValue("name"))
+	if name == "" {
+		u.render(w, "users_edit", map[string]any{"User": current, "Error": "Name is required."})
+		return
+	}
+	comment := r.PostFormValue("comment")
+	limitGB, _ := strconv.ParseFloat(r.PostFormValue("usage_limit_GB"), 64)
+	pkgDays, _ := strconv.Atoi(r.PostFormValue("package_days"))
+	enable := r.PostFormValue("enable") == "on"
+	limitBytes := util.GBToBytes(limitGB)
+
+	if _, err := u.store.PatchUser(r.Context(), id, db.PatchUserInput{
+		Name:            &name,
+		Comment:         &comment,
+		UsageLimitBytes: &limitBytes,
+		PackageDays:     &pkgDays,
+		Enable:          &enable,
+	}); err != nil {
+		slog.Error("ui edit user", "err", err)
+		u.render(w, "users_edit", map[string]any{"User": current, "Error": "Save failed: " + err.Error()})
+		return
+	}
+
+	// Keep xray in lockstep when the enabled flag changed.
+	if enable != current.Enable {
+		var xerr error
+		if enable {
+			xerr = u.xc.AddUser(r.Context(), id)
+		} else {
+			xerr = u.xc.RemoveUser(r.Context(), id)
+		}
+		if xerr != nil {
+			slog.Warn("ui edit xray sync", "uuid", id, "enable", enable, "err", xerr)
+		}
+	}
+	http.Redirect(w, r, u.absURL("/ui/users/"+id.String()+"/"), http.StatusFound)
+}
+
+// usersDeleteBulk — POST /ui/users/delete-bulk. Deletes every checked user
+// (form field `uuids`, repeated) from xray + the DB. Per-row failures are
+// logged and skipped so one bad uuid never aborts the batch.
+func (u *UI) usersDeleteBulk(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		u.renderError(w, http.StatusBadRequest, "bad form")
+		return
+	}
+	ids := r.PostForm["uuids"]
+	deleted := 0
+	for _, s := range ids {
+		id, err := uuid.Parse(s)
+		if err != nil {
+			continue
+		}
+		if err := u.xc.RemoveUser(r.Context(), id); err != nil {
+			slog.Warn("ui bulk delete xray RemoveUser", "uuid", id, "err", err)
+		}
+		if err := u.store.DeleteUser(r.Context(), id); err != nil && !errors.Is(err, db.ErrNotFound) {
+			slog.Error("ui bulk delete db", "uuid", id, "err", err)
+			continue
+		}
+		deleted++
+	}
+	slog.Info("ui bulk delete", "requested", len(ids), "deleted", deleted)
+	http.Redirect(w, r, u.absURL("/ui/users/"), http.StatusFound)
 }

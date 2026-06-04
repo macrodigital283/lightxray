@@ -45,6 +45,7 @@
     </section>
 
     <section class="card actions">
+      <a class="btn-edit" href="{{.Prefix}}/ui/users/{{.User.UUID}}/edit">Edit</a>
       <form method="post" action="{{.Prefix}}/ui/users/{{.User.UUID}}/toggle" class="inline">
         <button type="submit">{{if .User.Enable}}Disable{{else}}Enable{{end}}</button>
       </form>

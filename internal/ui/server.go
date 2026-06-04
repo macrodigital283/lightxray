@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/macrodigital283/lightxray/internal/config"
@@ -61,8 +62,11 @@ func (u *UI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/users/new", u.requireAuth(u.usersNewForm))
 	mux.HandleFunc("POST /ui/users/new", u.requireAuth(u.usersNewSubmit))
 	mux.HandleFunc("GET /ui/users/{uuid}/", u.requireAuth(u.usersDetail))
+	mux.HandleFunc("GET /ui/users/{uuid}/edit", u.requireAuth(u.usersEditForm))
+	mux.HandleFunc("POST /ui/users/{uuid}/edit", u.requireAuth(u.usersEditSubmit))
 	mux.HandleFunc("POST /ui/users/{uuid}/delete", u.requireAuth(u.usersDelete))
 	mux.HandleFunc("POST /ui/users/{uuid}/toggle", u.requireAuth(u.usersToggle))
+	mux.HandleFunc("POST /ui/users/delete-bulk", u.requireAuth(u.usersDeleteBulk))
 
 	// CDN host pool — operator-managed via the dashboard.
 	mux.HandleFunc("GET /ui/cdn/", u.requireAuth(u.cdnList))
@@ -129,6 +133,11 @@ func (u *UI) renderError(w http.ResponseWriter, code int, msg string) {
 var funcMap = template.FuncMap{
 	"gb": func(b int64) string {
 		return fmt.Sprintf("%.2f GB", float64(b)/(1024*1024*1024))
+	},
+	// gbinput renders usage_limit_bytes as a bare GB number for a form
+	// <input value> (no " GB" suffix) — shortest form that round-trips.
+	"gbinput": func(b int64) string {
+		return strconv.FormatFloat(float64(b)/(1024*1024*1024), 'f', -1, 64)
 	},
 	// "ago" formats a *time.Time as a Last-Connection cell:
 	//   nil               →  "—"        state=never

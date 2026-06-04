@@ -1,0 +1,42 @@
+{{define "users_edit"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>edit {{.User.Name}} — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    <h1>Edit user</h1>
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+    <form method="post" action="{{.Prefix}}/ui/users/{{.User.UUID}}/edit" class="vstack">
+      <label>
+        <span>Name <em>(required)</em></span>
+        <input name="name" autofocus required value="{{.User.Name}}">
+      </label>
+      <label>
+        <span>Usage limit (GB) <em>— 0 = unlimited</em></span>
+        <input name="usage_limit_GB" type="number" min="0" step="0.1" value="{{gbinput .User.UsageLimitBytes}}">
+      </label>
+      <label>
+        <span>Package days <em>— 0 = unlimited</em></span>
+        <input name="package_days" type="number" min="0" step="1" value="{{.User.PackageDays}}">
+      </label>
+      <label>
+        <span>Comment <em>(optional)</em></span>
+        <input name="comment" value="{{.User.Comment}}">
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="enable" {{if .User.Enable}}checked{{end}}>
+        <span>Enabled</span>
+      </label>
+      <div class="actions">
+        <button type="submit">Save</button>
+        <a class="cancel" href="{{.Prefix}}/ui/users/{{.User.UUID}}/">Cancel</a>
+      </div>
+    </form>
+    <p class="hint dim">Usage counter and UUID aren't editable here — delete &amp; recreate if you need a fresh key.</p>
+  </main>
+</body>
+</html>
+{{end}}

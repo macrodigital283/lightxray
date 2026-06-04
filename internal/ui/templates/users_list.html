@@ -8,41 +8,90 @@
   {{template "_nav" .}}
   <main>
     <h1>Users <span class="badge">{{.Count}}</span></h1>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-label">Online</span>
+        <span class="stat-value"><span class="dot-online"></span>{{.Online}}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">CPU</span>
+        <span class="stat-value">{{printf "%.0f%%" .Stats.CPUPercent}} <small>{{.Stats.NumCPUs}} cores</small></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">RAM</span>
+        <span class="stat-value">{{printf "%.1f / %.1f" .Stats.RAMUsedGB .Stats.RAMTotalGB}} <small>GB</small></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Network</span>
+        <span class="stat-value">↓ {{printf "%.1f" .Stats.NetDownMbps}} &nbsp; ↑ {{printf "%.1f" .Stats.NetUpMbps}} <small>Mbps</small></span>
+      </div>
+    </div>
+
     {{if not .Users}}
       <p class="empty">No users yet. <a href="{{.Prefix}}/ui/users/new">Create one</a>.</p>
     {{else}}
-      <table class="users">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>UUID</th>
-            <th>Usage</th>
-            <th>Last Connection</th>
-            <th>Expires</th>
-            <th>State</th>
-            <th>Comment</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range .Users}}
-            <tr class="{{if not .Enable}}disabled{{end}}">
-              <td><a href="{{$.Prefix}}/ui/users/{{.UUID}}/">{{.Name}}</a></td>
-              <td><code>{{slice .UUID.String 0 8}}…</code></td>
-              <td>
-                {{gb .UsageBytes}}
-                {{if gt .UsageLimitBytes 0}}<small>/ {{gb .UsageLimitBytes}}</small>{{end}}
-                {{if gt .UsageLimitBytes 0}}
-                  <div class="bar"><span style="width:{{pct .UsageBytes .UsageLimitBytes}}%"></span></div>
-                {{end}}
-              </td>
-              <td>{{with ago .LastOnline}}<span class="conn-{{.State}}">{{.Text}}</span>{{end}}</td>
-              <td>{{with expiry .}}<span class="exp-{{.State}}">{{.Text}}</span>{{end}}</td>
-              <td>{{if .Enable}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}</td>
-              <td class="dim">{{.Comment}}</td>
+      <form method="post" action="{{.Prefix}}/ui/users/delete-bulk"
+            onsubmit="return confirm('Permanently delete the selected user(s)? Their subscriptions will stop working.');">
+        <div class="table-toolbar">
+          <button type="submit" class="danger small">Delete selected</button>
+          <span class="dim selected-count" id="selected-count"></span>
+        </div>
+        <table class="users">
+          <thead>
+            <tr>
+              <th class="check"><input type="checkbox" id="check-all" title="select all"></th>
+              <th>Name</th>
+              <th>UUID</th>
+              <th>Usage</th>
+              <th>Last Connection</th>
+              <th>Expires</th>
+              <th>State</th>
+              <th>Comment</th>
+              <th></th>
             </tr>
-          {{end}}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {{range .Users}}
+              <tr class="{{if not .Enable}}disabled{{end}}">
+                <td class="check"><input type="checkbox" class="row-check" name="uuids" value="{{.UUID}}"></td>
+                <td><a href="{{$.Prefix}}/ui/users/{{.UUID}}/">{{.Name}}</a></td>
+                <td><code>{{slice .UUID.String 0 8}}…</code></td>
+                <td>
+                  {{gb .UsageBytes}}
+                  {{if gt .UsageLimitBytes 0}}<small>/ {{gb .UsageLimitBytes}}</small>{{end}}
+                  {{if gt .UsageLimitBytes 0}}
+                    <div class="bar"><span style="width:{{pct .UsageBytes .UsageLimitBytes}}%"></span></div>
+                  {{end}}
+                </td>
+                <td>{{with ago .LastOnline}}<span class="conn-{{.State}}">{{.Text}}</span>{{end}}</td>
+                <td>{{with expiry .}}<span class="exp-{{.State}}">{{.Text}}</span>{{end}}</td>
+                <td>{{if .Enable}}<span class="ok">enabled</span>{{else}}<span class="off">disabled</span>{{end}}</td>
+                <td class="dim">{{.Comment}}</td>
+                <td><a class="edit-link" href="{{$.Prefix}}/ui/users/{{.UUID}}/edit">Edit</a></td>
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </form>
+      <script>
+        (function () {
+          var all = document.getElementById('check-all');
+          var rows = document.querySelectorAll('input.row-check');
+          var label = document.getElementById('selected-count');
+          function refresh() {
+            var n = 0;
+            for (var i = 0; i < rows.length; i++) if (rows[i].checked) n++;
+            if (label) label.textContent = n ? n + ' selected' : '';
+            if (all) all.checked = n > 0 && n === rows.length;
+          }
+          if (all) all.addEventListener('change', function () {
+            for (var i = 0; i < rows.length; i++) rows[i].checked = all.checked;
+            refresh();
+          });
+          for (var i = 0; i < rows.length; i++) rows[i].addEventListener('change', refresh);
+        })();
+      </script>
     {{end}}
   </main>
 </body>
