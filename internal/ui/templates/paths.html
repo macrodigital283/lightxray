@@ -1,0 +1,74 @@
+{{define "paths_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>paths — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    {{with .V}}
+    <h1>Connection paths</h1>
+    <p class="dim">
+      The <strong>client path</strong> prefixes the customer subscription-fetch
+      URL (<code>/&lt;client&gt;/&lt;uuid&gt;/sub</code>). The <strong>WS path</strong>
+      is the short token the VLESS-over-WebSocket data plane listens on. Both are
+      embedded in nginx (and the WS path in xray too), so changing them rotates
+      the URLs every customer uses.
+    </p>
+
+    <p class="flash error" style="border-style:solid">
+      ⚠ <strong>Disruptive.</strong> Changing either path <strong>invalidates every
+      existing customer key/sub on this node</strong> until each client refetches
+      its subscription, and the pool must re-discover the client path. Do this on a
+      fresh node, or during planned maintenance — not casually on a node with live
+      customers.
+    </p>
+
+    <section class="card">
+      <h2>Current</h2>
+      <p>Client path: <code>{{.ClientPath}}</code></p>
+      <p>WS path: <code>{{.WSPath}}</code></p>
+    </section>
+
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+    {{if .Applied}}<p class="flash ok-flash">Applied. nginx reloaded and lightxray
+      is restarting (~2s) — this dashboard stays on the same admin URL, just refresh.
+      Existing customers must refetch their subscription to get the new paths.</p>{{end}}
+
+    <section class="card">
+      <h2>Change paths</h2>
+      <p class="dim" style="font-size:12.5px">
+        Leave a field at its current value to keep it. Client path: 4-64 of
+        <code>A-Z a-z 0-9 _ -</code>. WS path: a leading <code>/</code> then a short
+        token (Hiddify-style, e.g. <code>/VXz0nhwTxdZGAh3J7dkqi7Z</code>).
+      </p>
+      <form method="post" action="{{$.Prefix}}/ui/paths/" class="vstack"
+            onsubmit="return confirm('Rotate connection paths? Every existing customer key on this node stops working until the client refetches its subscription. lightxray will restart.');">
+        <label>
+          <span>Client path</span>
+          <input name="client_path" spellcheck="false" autocomplete="off"
+                 value="{{.ClientPath}}">
+        </label>
+        <label>
+          <span>WS path</span>
+          <input name="ws_path" spellcheck="false" autocomplete="off"
+                 value="{{.WSPath}}">
+        </label>
+        <div class="actions">
+          <button type="submit">Apply new paths</button>
+        </div>
+      </form>
+    </section>
+
+    {{if .Output}}
+    <section class="card">
+      <h2>Last apply output</h2>
+      <pre class="copy">{{.Output}}</pre>
+    </section>
+    {{end}}
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}

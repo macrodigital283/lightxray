@@ -16,3 +16,8 @@
 # go
 /vendor/
 *.exe
+
+# deploy-script outputs (may contain admin UUIDs / passwords — never commit)
+deploy/__pycache__/
+deploy/lightxray-credentials.json
+deploy/lightxray-install-logs/

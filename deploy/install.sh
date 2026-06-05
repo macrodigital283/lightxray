@@ -185,12 +185,14 @@ install -m 0644 "$SRC_DIR/deploy/systemd/lightxrayd.service" /etc/systemd/system
 install -m 0644 "$SRC_DIR/deploy/systemd/xray.service"        /etc/systemd/system/xray.service
 systemctl daemon-reload
 
-# Domain-apply helper + tightly-scoped sudoers grant so the dashboard's
-# Domains page can issue a cert + flip the management domain.
-log "installing lightxray-applydomain helper + sudoers grant"
+# Domain-apply + path-apply helpers + tightly-scoped sudoers grant so the
+# dashboard's Domains page can issue a cert + flip the management domain, and
+# its Paths page can rotate the client/WS paths (regenerate nginx + xray).
+log "installing lightxray-applydomain + lightxray-applypaths helpers + sudoers grant"
 install -m 0755 "$SRC_DIR/deploy/lightxray-applydomain" /usr/local/bin/lightxray-applydomain
+install -m 0755 "$SRC_DIR/deploy/lightxray-applypaths"  /usr/local/bin/lightxray-applypaths
 cat > /etc/sudoers.d/lightxray <<'SUDO'
-lightxray ALL=(root) NOPASSWD: /usr/local/bin/lightxray-applydomain
+lightxray ALL=(root) NOPASSWD: /usr/local/bin/lightxray-applydomain, /usr/local/bin/lightxray-applypaths
 SUDO
 chmod 0440 /etc/sudoers.d/lightxray
 visudo -cf /etc/sudoers.d/lightxray >/dev/null

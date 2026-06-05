@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# Privileged helper invoked by lightxrayd via sudo from the dashboard's Paths
+# page. Two positional args: the new client proxy path and the new WS path.
+# Either may be the literal "-" meaning "leave this one unchanged" so the
+# operator can edit just one. Tightly validated so the sudoers grant is safe.
+#
+# Both paths are baked into the DATA PLANE, not just a DB value:
+#   client path → nginx's customer sub-fetch route (and the pool auto-discovers
+#                 it). Changing it makes existing /sub URLs 404 until the
+#                 customer refetches.
+#   ws path     → nginx's WS `location =` AND xray's vless-ws-in inbound `path`.
+#                 Changing it breaks every live WS connection until refetch.
+# The dashboard warns about this before calling us.
+#
+# What it does (only for the path(s) that actually change):
+#   1. validate both paths (URL-safe; blocks shell/regex/JSON injection)
+#   2. rewrite LX_CLIENT_PROXY_PATH / LX_VLESS_WS_PATH in config.env
+#   3. regenerate the nginx http backend from the template (always, since both
+#      paths live there); regenerate xray's config from the template only when
+#      the WS path changed; update ws_path_token in the DB when WS changed
+#   4. nginx -t && reload
+#   5. restart lightxrayd always (picks up config.env + re-hydrates xray);
+#      additionally restart xray when WS changed (loads the new inbound path).
+#      Both restarts run OUT-OF-BAND via systemd-run so we don't SIGTERM our
+#      own sudo-child cgroup mid-command (see lightxray-applydomain for why).
+#
+# Exit non-zero with a clear message on any failure; the dashboard shows the
+# output verbatim.
+set -euo pipefail
+
+NEW_CLIENT="${1:-}"
+NEW_WS="${2:-}"
+if [[ -z "$NEW_CLIENT" && -z "$NEW_WS" ]]; then
+    echo "ERROR: usage: lightxray-applypaths <client_path|-> <ws_path|->"; exit 1
+fi
+
+CONF=/etc/lightxray/config.env
+SRC_DIR="${SRC_DIR:-/opt/lightxray-src}"
+XRAY_JSON=/usr/local/etc/xray/config.json
+NGINX_HTTP=/etc/nginx/conf.d/lightxray-http.conf
+
+[[ -f "$CONF" ]] || { echo "ERROR: $CONF missing"; exit 1; }
+[[ -d "$SRC_DIR/deploy" ]] || { echo "ERROR: source tree $SRC_DIR missing — can't regenerate config (re-run install or git clone there)"; exit 1; }
+
+# Snapshot current values.
+set -a; . "$CONF"; set +a
+OLD_CLIENT="${LX_CLIENT_PROXY_PATH:-}"
+OLD_WS="${LX_VLESS_WS_PATH:-}"
+
+CHANGED_CLIENT=0
+CHANGED_WS=0
+
+# ── validate + resolve client path ───────────────────────────────────────
+if [[ "$NEW_CLIENT" != "-" && -n "$NEW_CLIENT" ]]; then
+    NEW_CLIENT="${NEW_CLIENT#/}"; NEW_CLIENT="${NEW_CLIENT%/}"   # config.go trims slashes anyway
+    if [[ ! "$NEW_CLIENT" =~ ^[A-Za-z0-9_-]{4,64}$ ]]; then
+        echo "ERROR: invalid client path (want 4-64 of [A-Za-z0-9_-]): '${NEW_CLIENT}'"; exit 1
+    fi
+    [[ "$NEW_CLIENT" != "$OLD_CLIENT" ]] && CHANGED_CLIENT=1
+else
+    NEW_CLIENT="$OLD_CLIENT"
+fi
+
+# ── validate + resolve ws path (single leading slash, Hiddify-style) ──────
+if [[ "$NEW_WS" != "-" && -n "$NEW_WS" ]]; then
+    NEW_WS="/${NEW_WS#/}"                                        # normalize to exactly one leading slash
+    if [[ ! "$NEW_WS" =~ ^/[A-Za-z0-9_/-]{2,128}$ ]]; then
+        echo "ERROR: invalid ws path (want '/' then 2-128 of [A-Za-z0-9_/-]): '${NEW_WS}'"; exit 1
+    fi
+    [[ "$NEW_WS" != "$OLD_WS" ]] && CHANGED_WS=1
+else
+    NEW_WS="$OLD_WS"
+fi
+
+if [[ "$CHANGED_CLIENT" == "0" && "$CHANGED_WS" == "0" ]]; then
+    echo "OK: no change — paths already match (client=${OLD_CLIENT} ws=${OLD_WS})"; exit 0
+fi
+
+echo "==> client path: ${OLD_CLIENT} -> ${NEW_CLIENT}  (changed=${CHANGED_CLIENT})"
+echo "==> ws path:     ${OLD_WS} -> ${NEW_WS}  (changed=${CHANGED_WS})"
+
+# ── 1. rewrite config.env ─────────────────────────────────────────────────
+if [[ "$CHANGED_CLIENT" == "1" ]]; then
+    if grep -q '^LX_CLIENT_PROXY_PATH=' "$CONF"; then
+        sed -i "s|^LX_CLIENT_PROXY_PATH=.*|LX_CLIENT_PROXY_PATH=${NEW_CLIENT}|" "$CONF"
+    else
+        echo "LX_CLIENT_PROXY_PATH=${NEW_CLIENT}" >> "$CONF"
+    fi
+fi
+if [[ "$CHANGED_WS" == "1" ]]; then
+    if grep -q '^LX_VLESS_WS_PATH=' "$CONF"; then
+        sed -i "s|^LX_VLESS_WS_PATH=.*|LX_VLESS_WS_PATH=${NEW_WS}|" "$CONF"
+    else
+        echo "LX_VLESS_WS_PATH=${NEW_WS}" >> "$CONF"
+    fi
+fi
+# Re-source so the regen below uses the new values for ALL placeholders.
+set -a; . "$CONF"; set +a
+
+# ── 2. regenerate nginx http backend (both paths live here) ───────────────
+echo "==> regenerating ${NGINX_HTTP}"
+sed -e "s|__LX_DOMAIN__|${LX_PUBLIC_HOST:-_}|g" \
+    -e "s|__LX_ADMIN_PROXY_PATH__|${LX_ADMIN_PROXY_PATH}|g" \
+    -e "s|__LX_CLIENT_PROXY_PATH__|${LX_CLIENT_PROXY_PATH}|g" \
+    -e "s|__LX_VLESS_WS_PATH__|${LX_VLESS_WS_PATH}|g" \
+    -e "s|__LX_VLESS_GRPC_SERVICE__|${LX_VLESS_GRPC_SERVICE}|g" \
+    "$SRC_DIR/deploy/nginx/lightxray.conf.tmpl" > "${NGINX_HTTP}.new"
+mv "${NGINX_HTTP}.new" "$NGINX_HTTP"
+
+# ── 3. regenerate xray config + DB token (only when WS changed) ───────────
+if [[ "$CHANGED_WS" == "1" ]]; then
+    echo "==> regenerating ${XRAY_JSON}"
+    sed -e "s|__LX_VLESS_WS_PATH__|${LX_VLESS_WS_PATH}|g" \
+        -e "s|__LX_VLESS_GRPC_SERVICE__|${LX_VLESS_GRPC_SERVICE}|g" \
+        -e "s|__LX_REALITY_TARGET__|${LX_REALITY_TARGET}|g" \
+        -e "s|__LX_REALITY_PRIVKEY__|${LX_REALITY_PRIVKEY}|g" \
+        -e "s|__LX_REALITY_SHORT_ID__|${LX_REALITY_SHORT_ID}|g" \
+        "$SRC_DIR/deploy/xray-config.json.tmpl" > "${XRAY_JSON}.new"
+    # Sanity: refuse to install a non-JSON config (a bad substitution would
+    # otherwise crash-loop xray and strand the box).
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "import json,sys; json.load(open('${XRAY_JSON}.new'))" \
+            || { echo "ERROR: regenerated xray config is not valid JSON — aborting, nothing changed in xray"; rm -f "${XRAY_JSON}.new"; exit 1; }
+    fi
+    chown xray:xray "${XRAY_JSON}.new"
+    chmod 640 "${XRAY_JSON}.new"
+    mv "${XRAY_JSON}.new" "$XRAY_JSON"
+
+    echo "==> updating ws_path_token in DB"
+    sudo -u postgres psql -d lightxray -v ON_ERROR_STOP=1 -v tok="${LX_VLESS_WS_PATH}" >/dev/null <<'SQL'
+INSERT INTO settings (key, value) VALUES ('ws_path_mode','shared'), ('ws_path_token', :'tok')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+SQL
+fi
+
+# ── 4. validate + reload nginx ────────────────────────────────────────────
+echo "==> nginx -t && reload"
+nginx -t
+systemctl reload nginx
+
+# ── 5. restart services OUT-OF-BAND ───────────────────────────────────────
+# This helper is a sudo child of lightxrayd.service: a direct restart SIGTERMs
+# our own cgroup mid-command, so the dashboard sees a false failure. Schedule
+# the restarts as a transient unit in their OWN cgroup ~2s after we exit, so
+# our success message + the HTTP response flush first. Restart xray BEFORE
+# lightxrayd (when WS changed) so xray is up with the new inbound path by the
+# time lightxrayd re-hydrates users into it.
+RESTARTS="/usr/bin/systemctl restart lightxrayd"
+if [[ "$CHANGED_WS" == "1" ]]; then
+    RESTARTS="/usr/bin/systemctl restart xray && ${RESTARTS}"
+fi
+systemd-run --on-active=2s --timer-property=AccuracySec=200ms --collect \
+    /bin/sh -c "$RESTARTS" >/dev/null
+
+echo "OK: paths updated (client=${LX_CLIENT_PROXY_PATH} ws=${LX_VLESS_WS_PATH})."
+echo "    Existing customer keys/subs on this node are invalid until their client refetches."
