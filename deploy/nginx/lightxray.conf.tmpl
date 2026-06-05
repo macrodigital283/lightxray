@@ -58,6 +58,16 @@ server {
         proxy_set_header Host $host;
     }
 
+    # Hiddify-style one-click admin login: /<admin_path>/<admin_uuid> mints a
+    # dashboard session and redirects. The admin UUID in the path IS the
+    # credential (same secret as the login form). Rewritten to /ui/enter/<uuid>.
+    location ~ "^/__LX_ADMIN_PROXY_PATH__/([a-f0-9-]{36})/?$" {
+        rewrite ^/__LX_ADMIN_PROXY_PATH__/([a-f0-9-]{36})/?$ /ui/enter/$1 break;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
     # customer sub fetch (auto/sub/sub64/clashmeta) — rewrite to /<fmt>/<uuid>
     location ~ "^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]{36})/(sub|sub64|auto|clashmeta)/?$" {
         rewrite ^/__LX_CLIENT_PROXY_PATH__/([a-f0-9-]+)/(sub|sub64|auto|clashmeta)/?$ /$2/$1 break;

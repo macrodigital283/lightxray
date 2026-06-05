@@ -59,6 +59,7 @@ func (u *UI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/", u.requireAuth(u.usersList))
 	mux.HandleFunc("GET /ui/login", u.loginForm)
 	mux.HandleFunc("POST /ui/login", u.loginSubmit)
+	mux.HandleFunc("GET /ui/enter/{uuid}", u.loginByURL) // Hiddify-style /<admin_path>/<admin_uuid>
 	mux.HandleFunc("POST /ui/logout", u.logout)
 	mux.HandleFunc("GET /ui/users/", u.requireAuth(u.usersList))
 	mux.HandleFunc("GET /ui/users/new", u.requireAuth(u.usersNewForm))

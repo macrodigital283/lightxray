@@ -43,6 +43,19 @@ func (u *UI) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.absURL("/ui/users/"), http.StatusFound)
 }
 
+// loginByURL — GET /ui/enter/{uuid}. Hiddify-style one-click admin login:
+// the admin UUID in the URL path is the credential (nginx rewrites
+// /<admin_path>/<admin_uuid> to here). On match, mint a session cookie and
+// bounce to the dashboard; otherwise back to the login form.
+func (u *UI) loginByURL(w http.ResponseWriter, r *http.Request) {
+	if u.checkAdminUUID(r.PathValue("uuid")) {
+		u.setSessionCookie(w, u.mintSession())
+		http.Redirect(w, r, u.absURL("/ui/users/"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, u.absURL("/ui/login"), http.StatusFound)
+}
+
 // logout clears the cookie and bounces back to the login page.
 func (u *UI) logout(w http.ResponseWriter, r *http.Request) {
 	u.clearSessionCookie(w)
