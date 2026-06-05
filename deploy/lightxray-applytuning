@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Privileged helper invoked by lightxrayd via sudo from the dashboard's
+# Performance page. Single arg: the desired nginx worker_connections value.
+# Edits the events{} block of /etc/nginx/nginx.conf and does a GRACEFUL reload
+# (existing connections preserved — no xray restart, no path change, so VLESS
+# keys and the pool are untouched). 1024 is the stock baseline ("off"); a
+# larger value lifts the concurrent-connection ceiling on a large server.
+#
+# Tightly validated + reverts on any nginx -t failure so a bad value can never
+# leave nginx unable to reload.
+set -euo pipefail
+
+VAL="${1:-}"
+if [[ ! "$VAL" =~ ^[0-9]+$ ]] || (( VAL < 1024 || VAL > 262144 )); then
+    echo "ERROR: worker_connections must be an integer 1024..262144: '${VAL}'"; exit 1
+fi
+
+CONF=/etc/nginx/nginx.conf
+[[ -f "$CONF" ]] || { echo "ERROR: $CONF missing"; exit 1; }
+
+cp -a "$CONF" "${CONF}.lxbak"
+
+if grep -qE '^[[:space:]]*worker_connections[[:space:]]+[0-9]+;' "$CONF"; then
+    sed -i -E "s/^([[:space:]]*)worker_connections[[:space:]]+[0-9]+;/\1worker_connections ${VAL};/" "$CONF"
+    echo "==> set worker_connections ${VAL}"
+elif grep -qE '^[[:space:]]*events[[:space:]]*\{' "$CONF"; then
+    # No existing directive — insert one into the events{} block.
+    sed -i -E "s/^([[:space:]]*events[[:space:]]*\{)/\1\n    worker_connections ${VAL};/" "$CONF"
+    echo "==> inserted worker_connections ${VAL} into events{}"
+else
+    rm -f "${CONF}.lxbak"
+    echo "ERROR: no events{} block in $CONF — refusing to edit blindly"; exit 1
+fi
+
+if nginx -t 2>/dev/null; then
+    systemctl reload nginx
+    rm -f "${CONF}.lxbak"
+    echo "OK: worker_connections=${VAL} applied (nginx reloaded, graceful)."
+else
+    mv -f "${CONF}.lxbak" "$CONF"
+    echo "ERROR: 'nginx -t' failed with worker_connections=${VAL} — reverted, nothing changed."
+    nginx -t || true
+    exit 1
+fi

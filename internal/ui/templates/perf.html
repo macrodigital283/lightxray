@@ -1,0 +1,61 @@
+{{define "perf_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>performance — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    {{with .V}}
+    <h1>Performance</h1>
+    <p class="dim">
+      nginx accepts up to <code>worker_processes × worker_connections</code>
+      simultaneous sockets. Each customer WS uses ~4 (it transits the <code>:443</code>
+      SNI router and the <code>:8443</code> http backend — client + upstream on each).
+      The stock default is plenty for small/medium nodes; raise it on a large
+      server to lift the concurrent-user ceiling.
+    </p>
+
+    <section class="card">
+      <h2>Current</h2>
+      <p>worker_connections: <code>{{.WorkerConn}}</code>{{if .IsDefault}} <span class="dim">(default — off)</span>{{end}}</p>
+      <p>cores (worker_processes auto): <code>{{.Cores}}</code></p>
+      <p>≈ ceiling: <code>{{.EstUsers}}</code> concurrent WS users
+         <span class="dim">({{.Cores}} × {{.WorkerConn}} ÷ 4)</span></p>
+    </section>
+
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+    {{if .Applied}}<p class="flash ok-flash">Applied — nginx reloaded gracefully:
+      no dropped connections, no xray restart, VLESS keys &amp; pool unaffected.</p>{{end}}
+
+    <section class="card">
+      <h2>Adjust</h2>
+      <p class="dim" style="font-size:12.5px">
+        Default <code>1024</code> (off). Raise only on a large server. Applied with a
+        graceful <code>nginx -s reload</code> — zero downtime. Range 1024–262144.
+      </p>
+      <form method="post" action="{{$.Prefix}}/ui/perf/" class="vstack">
+        <label>
+          <span>worker_connections</span>
+          <input name="worker_connections" inputmode="numeric" pattern="[0-9]*"
+                 spellcheck="false" autocomplete="off" value="{{.WorkerConn}}">
+        </label>
+        <div class="actions">
+          <button type="submit">Apply</button>
+          <button type="submit" name="reset" value="1" class="link">reset to default (1024)</button>
+        </div>
+      </form>
+    </section>
+
+    {{if .Output}}
+    <section class="card">
+      <h2>Last apply output</h2>
+      <pre class="copy">{{.Output}}</pre>
+    </section>
+    {{end}}
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}

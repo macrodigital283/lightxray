@@ -23,6 +23,10 @@ const (
 	//   shared   → /<random_token>         (Hiddify-compatible; default)
 	SettingWSPathMode  = "ws_path_mode"  // "per_user" | "shared"
 	SettingWSPathToken = "ws_path_token" // the random token used in `shared` mode
+	// nginx worker_connections override set from the dashboard Performance
+	// page. Absent/empty = the stock 1024 baseline ("off"); a larger number
+	// raises the concurrent-connection ceiling on a large server.
+	SettingNginxWorkerConn = "nginx_worker_connections"
 )
 
 // GetSetting returns the stored value or "" if absent (NOT an error —

@@ -9,4 +9,6 @@ package version
 //
 // v2 — TLS session resumption on the nginx http backend (shared session
 //      cache + 1-day window) to flatten the CPU spikes from reconnect storms.
-const Number = "2"
+// v3 — dashboard Performance page: optionally raise nginx worker_connections
+//      for large servers (default off / stock 1024).
+const Number = "3"
