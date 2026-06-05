@@ -195,6 +195,10 @@ log "writing nginx http backend (127.0.0.1:8443) + stream router (:443)"
 mkdir -p /etc/nginx/conf.d
 [[ -f /etc/nginx/conf.d/default.conf ]] && \
     mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.disabled-by-lightxray
+# Ubuntu/Debian ship a default vhost in sites-enabled that ALSO claims
+# `listen 80 default_server`, which collides with ours ("duplicate default
+# server for 0.0.0.0:80"). Drop it — we own :80 now.
+rm -f /etc/nginx/sites-enabled/default
 sed -e "s|__LX_DOMAIN__|${DOMAIN}|g" \
     -e "s|__LX_ADMIN_PROXY_PATH__|${ADMIN_PROXY_PATH}|g" \
     -e "s|__LX_CLIENT_PROXY_PATH__|${CLIENT_PROXY_PATH}|g" \
