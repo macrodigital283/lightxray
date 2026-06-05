@@ -41,6 +41,20 @@ server {
     ssl_certificate_key /etc/lightxray/tls/current/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # TLS session resumption — lets a returning peer skip the full handshake's
+    # asymmetric crypto (the CPU-expensive ECDSA/RSA + ECDHE), so reconnect
+    # storms stop spiking CPU. On CDN-fronted WS the resuming peer is the
+    # Cloudflare edge on the CF→origin leg (each WS is its own connection — CF
+    # can't pool them); direct clients resume too. nginx already issues tickets
+    # by default, but only with a 5-minute window and no cache: a 50 MB shared
+    # cache + 1-day timeout ALSO resumes the long-idle reconnects (device
+    # sleep/wake, backgrounded apps) that otherwise pay a full handshake.
+    # Purely a server-side TLS optimization — invisible to the VLESS key, the
+    # pool, and client configs; applied by a graceful `nginx -s reload`.
+    ssl_session_cache   shared:SSL:50m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets on;
     add_header Strict-Transport-Security "max-age=15552000" always;
 
     # admin JSON API

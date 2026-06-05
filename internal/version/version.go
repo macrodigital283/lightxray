@@ -6,4 +6,7 @@ package version
 // Number is the simple release version (e.g. "1", "2", …) displayed in the
 // dashboard header so an operator can tell at a glance whether a node is
 // up to date. BUMP THIS when you cut a release worth distinguishing.
-const Number = "1"
+//
+// v2 — TLS session resumption on the nginx http backend (shared session
+//      cache + 1-day window) to flatten the CPU spikes from reconnect storms.
+const Number = "2"
