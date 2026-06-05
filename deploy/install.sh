@@ -91,6 +91,11 @@ ln -sf /usr/local/go/bin/go /usr/local/bin/go
 if ! command -v xray >/dev/null 2>&1; then
     log "installing xray-core"
     bash <(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh) install >/dev/null
+    # The XTLS installer auto-starts xray with its sample config. Stop it now
+    # so it can't linger on the wrong config — we start it cleanly onto our
+    # config.json at the end. If the install is then interrupted, xray is left
+    # stopped (heals on reboot / re-run) rather than stale-running.
+    systemctl stop xray 2>/dev/null || true
 fi
 
 # ── 2. service users + dirs ───────────────────────────────────────────

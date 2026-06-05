@@ -62,25 +62,32 @@ func main() {
 	}
 
 	// --- xray gRPC --------------------------------------------------------
-	// Keep retrying — xray may still be coming up when systemd starts us.
-	xc, err := xray.DialWithRetry(ctx, cfg.XrayGRPCAddr, cfg.XrayInboundTag, 30*time.Second)
+	// Non-blocking: gRPC connects lazily and auto-reconnects, so a not-ready
+	// or restarting xray never blocks startup or crash-loops us. The
+	// dashboard (below) comes up immediately; we hydrate + reconcile once
+	// xray answers, and reconnect automatically if xray is later restarted
+	// onto a good config.
+	xc, err := xray.New(cfg.XrayGRPCAddr, cfg.XrayInboundTag)
 	if err != nil {
-		slog.Error("xray dial", "err", err)
+		slog.Error("xray client", "err", err)
 		os.Exit(1)
 	}
 	defer xc.Close()
 
-	// xray's user list lives in-process; if xray restarted, our DB is the
-	// source of truth and must be replayed back in.
-	if n, err := xc.HydrateFromDB(ctx, store); err != nil {
-		slog.Warn("xray hydrate (continuing)", "err", err, "rehydrated", n)
-	} else {
-		slog.Info("xray hydrated", "users", n)
-	}
-
-	// --- background reconciler -------------------------------------------
-	rec := reconciler.New(store, xc, cfg)
-	go rec.Run(ctx)
+	go func() {
+		if err := xc.WaitReady(ctx); err != nil {
+			return // ctx cancelled — shutting down before xray came up
+		}
+		// xray's user list lives in-process; if xray restarted, our DB is
+		// the source of truth and must be replayed back in.
+		if n, err := xc.HydrateFromDB(ctx, store); err != nil {
+			slog.Warn("xray hydrate (continuing)", "err", err, "rehydrated", n)
+		} else {
+			slog.Info("xray hydrated", "users", n)
+		}
+		// Reconcile only once xray is live (and after hydrate).
+		reconciler.New(store, xc, cfg).Run(ctx)
+	}()
 
 	// --- HTTP server ------------------------------------------------------
 	srv := &http.Server{

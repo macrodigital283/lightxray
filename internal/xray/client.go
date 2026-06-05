@@ -52,64 +52,58 @@ type Client struct {
 	inboundTags []string
 }
 
-// Dial opens a plaintext gRPC connection to xray's admin port and verifies
-// it answers by issuing a no-op stats query.
+// New creates a LAZY gRPC client to xray's admin port. It does NOT block on
+// or verify the connection: gRPC connects on first use and auto-reconnects,
+// so a not-yet-ready or restarting xray never blocks startup or crash-loops
+// the daemon. Use WaitReady to wait for xray, or just issue calls — they
+// fail with Unavailable until xray answers, which callers already tolerate.
 //
 // inboundTagsCSV is a comma-separated list of inbound tags (e.g.
-// "vless-ws-in,vless-grpc-in,vless-reality-in"). A bare hostname
-// without commas still works — treated as a single-element list.
-func Dial(ctx context.Context, addr, inboundTagsCSV string) (*Client, error) {
-	dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	conn, err := grpc.DialContext(
-		dctx, addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("grpc dial %s: %w", addr, err)
-	}
+// "vless-ws-in,vless-grpc-in,vless-reality-in"). A bare hostname without
+// commas still works — treated as a single-element list.
+func New(addr, inboundTagsCSV string) (*Client, error) {
 	tags := splitTags(inboundTagsCSV)
 	if len(tags) == 0 {
-		conn.Close()
 		return nil, fmt.Errorf("no xray inbound tags configured")
 	}
-	c := &Client{
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("grpc client %s: %w", addr, err)
+	}
+	return &Client{
 		conn:        conn,
 		handler:     proxymancmd.NewHandlerServiceClient(conn),
 		stats:       statscmd.NewStatsServiceClient(conn),
 		inboundTags: tags,
-	}
-	// Sanity: list zero stats. Returns OK on a healthy xray with the
-	// StatsService enabled.
-	probectx, pcancel := context.WithTimeout(ctx, 3*time.Second)
-	defer pcancel()
-	if _, err := c.stats.QueryStats(probectx, &statscmd.QueryStatsRequest{Pattern: "lightxray-probe-no-match"}); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("xray stats probe: %w", err)
-	}
-	return c, nil
+	}, nil
 }
 
-// DialWithRetry retries Dial until it succeeds or the deadline expires.
-// xray may still be coming up under systemd when lightxrayd starts.
-func DialWithRetry(ctx context.Context, addr, inboundTag string, total time.Duration) (*Client, error) {
-	deadline := time.Now().Add(total)
+// Probe issues a no-op stats query. Returns nil when xray is up AND running
+// our config — the StatsService + api inbound only exist in our config, not
+// the XTLS-installer default, so this also detects a stale-config xray.
+func (c *Client) Probe(ctx context.Context) error {
+	pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	_, err := c.stats.QueryStats(pctx, &statscmd.QueryStatsRequest{Pattern: "lightxray-probe-no-match"})
+	return err
+}
+
+// WaitReady blocks until xray answers a Probe, retrying with backoff FOREVER
+// (until ctx is cancelled). This is what keeps lightxrayd alive and
+// self-healing: if xray is briefly missing (mid-restart) or stuck on a stale
+// config that an operator later fixes, the daemon just waits and reconnects
+// the moment xray comes good — instead of exiting and crash-looping.
+func (c *Client) WaitReady(ctx context.Context) error {
 	backoff := 500 * time.Millisecond
-	var lastErr error
 	for {
-		c, err := Dial(ctx, addr, inboundTag)
+		err := c.Probe(ctx)
 		if err == nil {
-			return c, nil
-		}
-		lastErr = err
-		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("xray unreachable after %s: %w", total, lastErr)
+			return nil
 		}
 		slog.Info("xray not ready yet, retrying", "err", err, "in", backoff)
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-time.After(backoff):
 		}
 		if backoff < 5*time.Second {
