@@ -127,7 +127,12 @@ if [[ "$CHANGED_WS" == "1" ]]; then
     mv "${XRAY_JSON}.new" "$XRAY_JSON"
 
     echo "==> updating ws_path_token in DB"
-    sudo -u postgres psql -d lightxray -v ON_ERROR_STOP=1 -v tok="${LX_VLESS_WS_PATH}" >/dev/null <<'SQL'
+    # Connect over TCP as the lightxray role (DSN from config.env) rather than
+    # `sudo -u postgres` — the latter's unix socket / nested sudo is fragile
+    # inside lightxrayd.service's PrivateTmp sandbox when we're invoked from
+    # the dashboard. TCP to 127.0.0.1:5432 is exactly how lightxrayd itself
+    # reaches Postgres, so it always works from the same sandbox.
+    psql "${LX_DATABASE_URL}" -v ON_ERROR_STOP=1 -v tok="${LX_VLESS_WS_PATH}" >/dev/null <<'SQL'
 INSERT INTO settings (key, value) VALUES ('ws_path_mode','shared'), ('ws_path_token', :'tok')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 SQL

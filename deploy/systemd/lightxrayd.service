@@ -15,12 +15,16 @@ LimitNOFILE=65536
 
 # Hardening — relaxed from the maximal set because the Domains page shells
 # out to `sudo lightxray-applydomain` (issue LE cert + reload nginx +
-# restart self). NoNewPrivileges MUST stay false so sudo can escalate.
-# ProtectSystem=full (not strict) keeps /usr + /etc read-only EXCEPT the
-# ReadWritePaths below: certbot must write /etc/letsencrypt, and the helper
-# writes the cert symlinks + config.env under /etc/lightxray. certbot's
-# work/log dirs (/var/lib + /var/log/letsencrypt) live under /var, which
-# stays writable under =full. Everything else is locked down.
+# restart self) and the Paths page to `sudo lightxray-applypaths` (rotate the
+# client/WS path → regenerate nginx + xray config). NoNewPrivileges MUST stay
+# false so sudo can escalate. ProtectSystem=full (not strict) keeps /usr +
+# /etc read-only EXCEPT the ReadWritePaths below:
+#   /etc/lightxray      — config.env + the TLS cert symlinks the helpers write
+#   /etc/letsencrypt    — certbot's lineage (Domains page)
+#   /etc/nginx          — applypaths regenerates the http backend conf here
+#   /usr/local/etc/xray — applypaths regenerates xray's config.json here
+# certbot's work/log dirs (/var/lib + /var/log/letsencrypt) live under /var,
+# which stays writable under =full. Everything else is locked down.
 NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=full
@@ -30,7 +34,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictRealtime=true
 LockPersonality=true
-ReadWritePaths=/var/log/lightxray /etc/lightxray /etc/letsencrypt
+ReadWritePaths=/var/log/lightxray /etc/lightxray /etc/letsencrypt /etc/nginx /usr/local/etc/xray
 
 [Install]
 WantedBy=multi-user.target
