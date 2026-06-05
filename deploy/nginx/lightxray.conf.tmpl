@@ -28,8 +28,10 @@ server {
 
 # Internal HTTPS backend — only reachable from the stream router on loopback.
 server {
-    listen 127.0.0.1:8443 ssl default_server;
-    http2 on;
+    # In-listen 'http2' flag (deprecated but still accepted in nginx >=
+    # 1.25.1) instead of the standalone 'http2 on;' directive (which only
+    # exists on 1.25.1+) so this works on Ubuntu 24.04's nginx 1.24 too.
+    listen 127.0.0.1:8443 ssl http2 default_server;
     server_name _;
 
     # Fixed cert path — the Domains page / install.sh symlink the active
