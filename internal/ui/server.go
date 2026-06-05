@@ -22,6 +22,7 @@ import (
 
 	"github.com/macrodigital283/lightxray/internal/config"
 	"github.com/macrodigital283/lightxray/internal/db"
+	"github.com/macrodigital283/lightxray/internal/version"
 	"github.com/macrodigital283/lightxray/internal/xray"
 )
 
@@ -112,7 +113,8 @@ func (u *UI) render(w http.ResponseWriter, name string, data map[string]any) {
 	// Make these always available — every template references them.
 	data["Prefix"] = "/" + u.cfg.AdminProxyPath
 	data["Host"] = u.cfg.PublicHost
-	data["Version"] = u.version
+	data["Version"] = version.Number // simple release number, e.g. "1"
+	data["Commit"] = u.version        // exact git build, shown on hover
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := u.templates.ExecuteTemplate(w, name, data); err != nil {
