@@ -77,7 +77,7 @@ REALITY_SHORT_ID="${REALITY_SHORT_ID:-$(openssl rand -hex 8)}"
 log "installing system packages"
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    git curl ca-certificates nginx certbot \
+    git curl ca-certificates nginx libnginx-mod-stream certbot \
     postgresql postgresql-contrib build-essential
 
 GO_VERSION="${GO_VERSION:-1.25.0}"
