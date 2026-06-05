@@ -38,17 +38,18 @@ type UI struct {
 	cfg       config.Config
 	store     *db.Store
 	xc        *xray.Client
+	version   string
 	templates *template.Template
 }
 
 // New parses all embedded templates and returns a UI ready to Register
 // onto an http.ServeMux. Panics if a template fails to parse — that's
 // always a build-time bug.
-func New(cfg config.Config, store *db.Store, xc *xray.Client) *UI {
+func New(cfg config.Config, store *db.Store, xc *xray.Client, version string) *UI {
 	tmpl := template.Must(
 		template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"),
 	)
-	return &UI{cfg: cfg, store: store, xc: xc, templates: tmpl}
+	return &UI{cfg: cfg, store: store, xc: xc, version: version, templates: tmpl}
 }
 
 // Register mounts dashboard routes onto an existing ServeMux. The caller
@@ -111,6 +112,7 @@ func (u *UI) render(w http.ResponseWriter, name string, data map[string]any) {
 	// Make these always available — every template references them.
 	data["Prefix"] = "/" + u.cfg.AdminProxyPath
 	data["Host"] = u.cfg.PublicHost
+	data["Version"] = u.version
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := u.templates.ExecuteTemplate(w, name, data); err != nil {

@@ -59,7 +59,7 @@ func New(cfg config.Config, store *db.Store, xc *xray.Client, version string) ht
 	// Server-rendered admin UI mounted under the SAME admin proxy path
 	// as the JSON API (nginx strips it before forwarding, so handlers
 	// here see clean /ui/ paths).
-	ui.New(cfg, store, xc).Register(mux)
+	ui.New(cfg, store, xc, version).Register(mux)
 
 	// ── operational ───────────────────────────────────────────────────
 	mux.HandleFunc("GET /healthz", d.healthz)

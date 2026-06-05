@@ -46,6 +46,14 @@ header {
   color: var(--dim);
   font-size: 12.5px;
 }
+.version {
+  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--dim);
+  background: var(--panel-2);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
 nav { margin-left: auto; display: flex; gap: 18px; align-items: center; }
 nav a { color: var(--dim); }
 nav a:hover { color: var(--fg); text-decoration: none; }
