@@ -17,4 +17,6 @@ package version
 //      NAT mappings warm) + CPU priority (data plane outranks the panel).
 // v6 — dashboard Admin Access page: rotate the admin path + admin UUID (the
 //      credential) from the UI, via the lightxray-applyadmin helper.
-const Number = "6"
+// v7 — expiry off-by-one fix: users are now disabled ON their expiry date
+//      (start_date + package_days <= today), not the day after.
+const Number = "7"

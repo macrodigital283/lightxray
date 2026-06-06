@@ -215,11 +215,18 @@ var funcMap = template.FuncMap{
 			return expiryDisplay{Text: "—", State: "dim"}
 		}
 		exp := u.StartDate.AddDate(0, 0, u.PackageDays)
-		days := int(time.Until(exp).Hours() / 24)
+		// Whole-day, date-based delta (both truncated to UTC midnight) so the
+		// "expired" label matches the reconciler's date-granular enforcement:
+		// a user is disabled when start_date + package_days <= today.
+		expDate := exp.UTC().Truncate(24 * time.Hour)
+		today := time.Now().UTC().Truncate(24 * time.Hour)
+		days := int(expDate.Sub(today).Hours() / 24)
 		date := exp.Format("2006-01-02")
 		switch {
 		case days < 0:
 			return expiryDisplay{Text: fmt.Sprintf("%s (%dd ago)", date, -days), State: "bad"}
+		case days == 0:
+			return expiryDisplay{Text: fmt.Sprintf("%s (expires today)", date), State: "bad"}
 		case days <= 7:
 			return expiryDisplay{Text: fmt.Sprintf("%s (in %dd)", date, days), State: "warn"}
 		default:
