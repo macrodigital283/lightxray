@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Privileged helper invoked by lightxrayd via sudo from the dashboard's Admin
+# Access page. Two positional args: the new admin proxy path and the new admin
+# UUID. Either may be the literal "-" meaning "leave unchanged". Tightly
+# validated so the sudoers grant is safe.
+#
+# The admin UUID is the dashboard credential, the Hiddify-API-Key, the one-click
+# login token AND the HMAC key that signs sessions; the admin path is the nginx
+# URL prefix for the dashboard + JSON API. So:
+#   admin path → rewrite LX_ADMIN_PROXY_PATH in config.env, regenerate the nginx
+#                http backend (the prefix lives in its location blocks), reload.
+#   admin uuid → rewrite LX_ADMIN_UUID in config.env (no nginx change — the
+#                login-by-URL location matches any [a-f0-9-]{36}; the backend
+#                checks the value).
+# Then restart lightxrayd out-of-band so it loads the new config.env. Applying
+# EITHER logs the operator out (re-keyed sessions / moved path); the dashboard
+# shows the new values + login URL.
+set -euo pipefail
+
+NEW_PATH="${1:-}"
+NEW_UUID="${2:-}"
+if [[ -z "$NEW_PATH" && -z "$NEW_UUID" ]]; then
+    echo "ERROR: usage: lightxray-applyadmin <admin_path|-> <admin_uuid|->"; exit 1
+fi
+
+CONF=/etc/lightxray/config.env
+SRC_DIR="${SRC_DIR:-/opt/lightxray-src}"
+NGINX_HTTP=/etc/nginx/conf.d/lightxray-http.conf
+
+[[ -f "$CONF" ]] || { echo "ERROR: $CONF missing"; exit 1; }
+
+set -a; . "$CONF"; set +a
+OLD_PATH="${LX_ADMIN_PROXY_PATH:-}"
+OLD_UUID="${LX_ADMIN_UUID:-}"
+CHANGED_PATH=0
+CHANGED_UUID=0
+
+# ── validate + resolve admin path ─────────────────────────────────────────
+if [[ "$NEW_PATH" != "-" && -n "$NEW_PATH" ]]; then
+    NEW_PATH="${NEW_PATH#/}"; NEW_PATH="${NEW_PATH%/}"
+    if [[ ! "$NEW_PATH" =~ ^[A-Za-z0-9_-]{4,64}$ ]]; then
+        echo "ERROR: invalid admin path (want 4-64 of [A-Za-z0-9_-]): '${NEW_PATH}'"; exit 1
+    fi
+    [[ "$NEW_PATH" != "$OLD_PATH" ]] && CHANGED_PATH=1
+else
+    NEW_PATH="$OLD_PATH"
+fi
+
+# ── validate + resolve admin uuid (lowercase standard UUID) ───────────────
+if [[ "$NEW_UUID" != "-" && -n "$NEW_UUID" ]]; then
+    NEW_UUID=$(printf '%s' "$NEW_UUID" | tr 'A-F' 'a-f')
+    if [[ ! "$NEW_UUID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+        echo "ERROR: invalid admin uuid (want a standard UUID): '${NEW_UUID}'"; exit 1
+    fi
+    [[ "$NEW_UUID" != "$OLD_UUID" ]] && CHANGED_UUID=1
+else
+    NEW_UUID="$OLD_UUID"
+fi
+
+if [[ "$CHANGED_PATH" == 0 && "$CHANGED_UUID" == 0 ]]; then
+    echo "OK: no change — admin path/uuid already match."; exit 0
+fi
+# Regenerating nginx needs the source templates; only required for a path change.
+if [[ "$CHANGED_PATH" == 1 && ! -d "$SRC_DIR/deploy" ]]; then
+    echo "ERROR: source tree $SRC_DIR missing — can't regenerate nginx for a path change"; exit 1
+fi
+
+# ── 1. rewrite config.env ─────────────────────────────────────────────────
+if [[ "$CHANGED_PATH" == 1 ]]; then
+    sed -i "s|^LX_ADMIN_PROXY_PATH=.*|LX_ADMIN_PROXY_PATH=${NEW_PATH}|" "$CONF"
+    grep -q '^LX_ADMIN_PROXY_PATH=' "$CONF" || echo "LX_ADMIN_PROXY_PATH=${NEW_PATH}" >> "$CONF"
+fi
+if [[ "$CHANGED_UUID" == 1 ]]; then
+    sed -i "s|^LX_ADMIN_UUID=.*|LX_ADMIN_UUID=${NEW_UUID}|" "$CONF"
+    grep -q '^LX_ADMIN_UUID=' "$CONF" || echo "LX_ADMIN_UUID=${NEW_UUID}" >> "$CONF"
+fi
+set -a; . "$CONF"; set +a
+
+# ── 2. regenerate nginx (only if the path changed) ────────────────────────
+if [[ "$CHANGED_PATH" == 1 ]]; then
+    echo "==> regenerating ${NGINX_HTTP} for the new admin path"
+    sed -e "s|__LX_DOMAIN__|${LX_PUBLIC_HOST:-_}|g" \
+        -e "s|__LX_ADMIN_PROXY_PATH__|${LX_ADMIN_PROXY_PATH}|g" \
+        -e "s|__LX_CLIENT_PROXY_PATH__|${LX_CLIENT_PROXY_PATH}|g" \
+        -e "s|__LX_VLESS_WS_PATH__|${LX_VLESS_WS_PATH}|g" \
+        -e "s|__LX_VLESS_GRPC_SERVICE__|${LX_VLESS_GRPC_SERVICE}|g" \
+        "$SRC_DIR/deploy/nginx/lightxray.conf.tmpl" > "${NGINX_HTTP}.new"
+    mv "${NGINX_HTTP}.new" "$NGINX_HTTP"
+    nginx -t
+    systemctl reload nginx
+fi
+
+# ── 3. restart lightxrayd OUT-OF-BAND (loads new config.env) ──────────────
+# This helper is a sudo child of lightxrayd.service: a direct restart SIGTERMs
+# our own cgroup mid-command. Schedule it ~2s out so our output + the HTTP
+# response flush first; the operator's session is already invalid after this.
+systemd-run --on-active=2s --timer-property=AccuracySec=200ms --collect \
+    /usr/bin/systemctl restart lightxrayd >/dev/null
+
+echo "OK: admin access updated."
+echo "  admin path: ${LX_ADMIN_PROXY_PATH}"
+echo "  admin uuid: ${LX_ADMIN_UUID}"
+echo "  you are now logged out — sign in again at the new path with the new uuid."

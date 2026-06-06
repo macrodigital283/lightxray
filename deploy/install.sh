@@ -188,12 +188,13 @@ systemctl daemon-reload
 # Dashboard helpers + tightly-scoped sudoers grant: Domains page issues a cert
 # + flips the management domain; Paths page rotates the client/WS paths
 # (regenerate nginx + xray); Performance page tunes nginx worker_connections.
-log "installing lightxray-applydomain + lightxray-applypaths + lightxray-applytuning helpers + sudoers grant"
+log "installing lightxray helpers (applydomain/applypaths/applytuning/applyadmin) + sudoers grant"
 install -m 0755 "$SRC_DIR/deploy/lightxray-applydomain" /usr/local/bin/lightxray-applydomain
 install -m 0755 "$SRC_DIR/deploy/lightxray-applypaths"  /usr/local/bin/lightxray-applypaths
 install -m 0755 "$SRC_DIR/deploy/lightxray-applytuning" /usr/local/bin/lightxray-applytuning
+install -m 0755 "$SRC_DIR/deploy/lightxray-applyadmin"  /usr/local/bin/lightxray-applyadmin
 cat > /etc/sudoers.d/lightxray <<'SUDO'
-lightxray ALL=(root) NOPASSWD: /usr/local/bin/lightxray-applydomain, /usr/local/bin/lightxray-applypaths, /usr/local/bin/lightxray-applytuning
+lightxray ALL=(root) NOPASSWD: /usr/local/bin/lightxray-applydomain, /usr/local/bin/lightxray-applypaths, /usr/local/bin/lightxray-applytuning, /usr/local/bin/lightxray-applyadmin
 SUDO
 chmod 0440 /etc/sudoers.d/lightxray
 visudo -cf /etc/sudoers.d/lightxray >/dev/null

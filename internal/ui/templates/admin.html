@@ -1,0 +1,82 @@
+{{define "admin_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>admin access — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    {{with .V}}
+    <h1>Admin access</h1>
+    <p class="dim">
+      The <strong>admin path</strong> is the URL prefix for this dashboard + the
+      JSON API. The <strong>admin UUID</strong> is the credential — it's the login
+      password, the <code>Hiddify-API-Key</code>, the one-click login token, and
+      the key your sessions are signed with. Rotate these if they've leaked.
+    </p>
+
+    {{if .Applied}}
+      <section class="card" style="border:2px solid #2e7d32">
+        <h2>✓ Applied — you are now logged out</h2>
+        <p>Your session ended (the admin UUID re-keys every session). <strong>Save these now</strong> —
+           you'll need them to get back in:</p>
+        <p>New admin path: <code class="copy">{{.AdminPath}}</code></p>
+        <p>New admin UUID: <code class="copy">{{.AdminUUID}}</code></p>
+        <p>One-click login (open this):<br><code class="copy">{{.NewLoginURL}}</code></p>
+        <p class="dim" style="font-size:12px">If you lose these, read them back on the box with
+           <code>grep LX_ADMIN_ /etc/lightxray/config.env</code>. lightxray is restarting (~2s).</p>
+      </section>
+    {{else}}
+
+    <p class="flash error" style="border-style:solid">
+      ⚠ <strong>Careful — this can lock you out.</strong> Changing either value
+      <strong>logs you out immediately</strong> and you must sign back in with the
+      <em>new</em> UUID at the <em>new</em> path. If this node is in a <strong>pool</strong>,
+      the pool's API key/base-path for it also stops working until you update it there.
+    </p>
+
+    <section class="card">
+      <h2>Current</h2>
+      <p>Admin path: <code>{{.AdminPath}}</code></p>
+      <p>Admin UUID: <code>{{.AdminUUID}}</code></p>
+    </section>
+
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+
+    <section class="card">
+      <h2>Change</h2>
+      <p class="dim" style="font-size:12.5px">
+        Admin path: 4–64 of <code>A-Z a-z 0-9 _ -</code>. Admin UUID: a standard
+        lowercase UUID. Leave a field at its current value to keep it.
+      </p>
+      <form method="post" action="{{$.Prefix}}/ui/admin/" class="vstack"
+            onsubmit="return confirm('Rotate admin access? You will be logged out and must sign in again with the NEW UUID at the NEW path. Make sure you have copied them.');">
+        <label>
+          <span>Admin path</span>
+          <input name="admin_path" spellcheck="false" autocomplete="off" value="{{.AdminPath}}">
+        </label>
+        <label>
+          <span>Admin UUID</span>
+          <input id="au" name="admin_uuid" spellcheck="false" autocomplete="off" value="{{.AdminUUID}}">
+        </label>
+        <div class="actions">
+          <button type="button" class="link"
+                  onclick="try{document.getElementById('au').value=crypto.randomUUID()}catch(e){alert('Generate a UUID manually')}">generate new UUID</button>
+          <button type="submit">Apply new admin access</button>
+        </div>
+      </form>
+    </section>
+
+    {{if .Output}}
+    <section class="card">
+      <h2>Last apply output</h2>
+      <pre class="copy">{{.Output}}</pre>
+    </section>
+    {{end}}
+    {{end}}
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}

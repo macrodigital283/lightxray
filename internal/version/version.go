@@ -15,4 +15,6 @@ package version
 //      auto-disabled and evicted from xray each tick (previously never were).
 // v5 — connection stability: TCP keepalive on the Reality inbound (keeps mobile
 //      NAT mappings warm) + CPU priority (data plane outranks the panel).
-const Number = "5"
+// v6 — dashboard Admin Access page: rotate the admin path + admin UUID (the
+//      credential) from the UI, via the lightxray-applyadmin helper.
+const Number = "6"

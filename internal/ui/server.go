@@ -85,6 +85,8 @@ func (u *UI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /ui/paths/", u.requireAuth(u.pathsApply))
 	mux.HandleFunc("GET /ui/perf/", u.requireAuth(u.perfPage))
 	mux.HandleFunc("POST /ui/perf/", u.requireAuth(u.perfApply))
+	mux.HandleFunc("GET /ui/admin/", u.requireAuth(u.adminPage))
+	mux.HandleFunc("POST /ui/admin/", u.requireAuth(u.adminApply))
 	mux.HandleFunc("GET /ui/backup/", u.requireAuth(u.backupPage))
 	mux.HandleFunc("GET /ui/backup/export.json", u.requireAuth(u.backupExport))
 	mux.HandleFunc("POST /ui/backup/restore", u.requireAuth(u.backupRestore))
