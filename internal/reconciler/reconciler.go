@@ -67,6 +67,7 @@ func (r *Reconciler) tick(ctx context.Context) {
 	var (
 		updated   int
 		online    int
+		enforced  int
 		totalDeltaUp   int64
 		totalDeltaDown int64
 	)
@@ -129,10 +130,30 @@ func (r *Reconciler) tick(ctx context.Context) {
 		updated++
 	}
 
+	// Enforce quota + expiry. One atomic UPDATE flips enable=FALSE for every
+	// enabled user who has hit their data cap or passed expiry; we then evict
+	// each from xray so a disabled user can't open new connections. This runs
+	// every tick regardless of traffic, so idle-but-expired users are caught
+	// too — not only those who moved bytes this tick. (An already-established
+	// connection drains until it closes; the eviction blocks RE-connection,
+	// which is the Hiddify-equivalent behaviour.)
+	if disabled, derr := r.store.DisableOverLimitOrExpired(tctx); derr != nil {
+		slog.Warn("reconciler: enforce limits failed", "err", derr)
+	} else {
+		for _, uid := range disabled {
+			if err := r.xc.RemoveUser(tctx, uid); err != nil {
+				slog.Warn("reconciler: evict from xray failed", "uuid", uid, "err", err)
+			}
+			slog.Info("reconciler: disabled user (over data cap / expired)", "uuid", uid)
+		}
+		enforced = len(disabled)
+	}
+
 	slog.Info("reconciler tick",
 		"users", updated,
 		"online", online,
 		"ghosts", ghosts,
+		"enforced", enforced,
 		"delta_up_bytes", totalDeltaUp,
 		"delta_down_bytes", totalDeltaDown,
 		"took", time.Since(start),

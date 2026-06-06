@@ -11,4 +11,6 @@ package version
 //      cache + 1-day window) to flatten the CPU spikes from reconnect storms.
 // v3 — dashboard Performance page: optionally raise nginx worker_connections
 //      for large servers (default off / stock 1024).
-const Number = "3"
+// v4 — reconciler now ENFORCES quotas + expiry: over-cap / expired users are
+//      auto-disabled and evicted from xray each tick (previously never were).
+const Number = "4"
