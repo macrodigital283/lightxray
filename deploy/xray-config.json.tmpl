@@ -16,7 +16,8 @@
     "levels": {
       "0": {
         "statsUserUplink":   true,
-        "statsUserDownlink": true
+        "statsUserDownlink": true,
+        "connIdle":          600
       }
     },
     "system": {
@@ -104,6 +105,10 @@
           "serverNames":  ["__LX_REALITY_TARGET__"],
           "privateKey":   "__LX_REALITY_PRIVKEY__",
           "shortIds":     ["", "__LX_REALITY_SHORT_ID__"]
+        },
+        "sockopt": {
+          "tcpKeepAliveIdle":     30,
+          "tcpKeepAliveInterval": 15
         }
       },
       "sniffing": {

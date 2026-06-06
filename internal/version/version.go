@@ -13,4 +13,6 @@ package version
 //      for large servers (default off / stock 1024).
 // v4 — reconciler now ENFORCES quotas + expiry: over-cap / expired users are
 //      auto-disabled and evicted from xray each tick (previously never were).
-const Number = "4"
+// v5 — connection stability: TCP keepalive on the Reality inbound (keeps mobile
+//      NAT mappings warm) + CPU priority (data plane outranks the panel).
+const Number = "5"

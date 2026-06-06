@@ -217,6 +217,16 @@ sed -e "s|__LX_DOMAIN__|${DOMAIN}|g" \
 sed -e "s|__LX_REALITY_TARGET__|${REALITY_TARGET}|g" \
     "$SRC_DIR/deploy/nginx/stream-sni-router.conf.tmpl" \
     > /etc/nginx/stream-conf.d/sni-router.conf
+
+# CPU priority: nginx is in the WS data path, so give it the same high cgroup
+# weight as xray (the xray + lightxrayd units carry their own CPUWeight). A
+# drop-in keeps the distro-managed nginx.service file untouched.
+mkdir -p /etc/systemd/system/nginx.service.d
+cat > /etc/systemd/system/nginx.service.d/lightxray-cpuweight.conf <<'NGX'
+[Service]
+CPUWeight=400
+NGX
+systemctl daemon-reload
 # Wire the top-level stream {} include into nginx.conf once.
 if ! grep -q "stream-conf.d" /etc/nginx/nginx.conf; then
     cat >> /etc/nginx/nginx.conf <<'NGX'

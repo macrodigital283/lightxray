@@ -12,6 +12,11 @@ ExecStart=/usr/local/bin/lightxrayd
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=65536
+# CPU priority — the panel/reconciler deliberately YIELDS to the data plane
+# (xray + nginx run CPUWeight=400) so a 60s reconciler tick never jitters a
+# live connection under CPU contention. Only matters under saturation; no
+# effect when the box has spare CPU.
+CPUWeight=40
 
 # Hardening — relaxed from the maximal set because the Domains page shells
 # out to `sudo lightxray-applydomain` (issue LE cert + reload nginx +

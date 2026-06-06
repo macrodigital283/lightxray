@@ -12,6 +12,11 @@ ExecStart=/usr/local/bin/xray run -c /etc/xray/config.json
 Restart=on-failure
 RestartSec=2
 LimitNOFILE=1048576
+# CPU priority (cgroup v2 weight; default 100). The data plane (xray + nginx)
+# outranks the panel, so a reconciler tick or dashboard load can never preempt
+# live customer traffic under CPU contention. No effect when CPU is idle — it
+# only kicks in under saturation. Pairs with lightxrayd's low CPUWeight.
+CPUWeight=400
 # NB: the XTLS installer ALSO drops
 # /etc/systemd/system/xray.service.d/10-donot_touch_single_conf.conf
 # which OVERRIDES the ExecStart above to point at
