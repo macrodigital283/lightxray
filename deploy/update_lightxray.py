@@ -52,7 +52,7 @@ fi
 git -C "$SRC" fetch --quiet origin 2>/dev/null && git -C "$SRC" reset --hard origin/main --quiet 2>/dev/null || { echo "RESULT|fail|git-update-failed|||"; exit 0; }
 SHA=$(git -C "$SRC" rev-parse --short HEAD)
 cd "$SRC"
-if ! CGO_ENABLED=0 /usr/local/bin/go build -trimpath -ldflags="-s -w -X main.version=$SHA" -o /usr/local/bin/lightxrayd.new ./cmd/lightxrayd 2>/tmp/lxbuild.err; then
+if ! CGO_ENABLED=0 nice -n 19 /usr/local/bin/go build -trimpath -ldflags="-s -w -X main.version=$SHA" -o /usr/local/bin/lightxrayd.new ./cmd/lightxrayd 2>/tmp/lxbuild.err; then
   echo "RESULT|fail|build:$(tail -1 /tmp/lxbuild.err 2>/dev/null | tr '|' ' ' | cut -c1-80)|$SHA||"; exit 0
 fi
 chmod 755 /usr/local/bin/lightxrayd.new && mv -f /usr/local/bin/lightxrayd.new /usr/local/bin/lightxrayd
