@@ -228,6 +228,20 @@ cat > /etc/systemd/system/nginx.service.d/lightxray-cpuweight.conf <<'NGX'
 CPUWeight=400
 NGX
 systemctl daemon-reload
+
+# worker_connections: the distro default (768) is FAR too low for a CDN-fronted
+# node — Cloudflare opens a separate origin connection per WS from each edge PoP,
+# so a node's live connection count runs ~10-20x its user count and exhausts 768
+# (which resets customers AND the dashboard; this took k64 down). Raise the
+# baseline to 16384 — raise-only, so an operator's higher Performance-page value
+# is preserved across re-installs — plus the FD headroom to back it.
+WC_CUR=$(sed -nE 's/^[[:space:]]*worker_connections[[:space:]]+([0-9]+);.*/\1/p' /etc/nginx/nginx.conf 2>/dev/null | head -1)
+if [[ -z "${WC_CUR:-}" ]]; then
+    sed -i -E 's/^([[:space:]]*events[[:space:]]*\{)/\1\n    worker_connections 16384;/' /etc/nginx/nginx.conf
+elif [[ "$WC_CUR" -lt 16384 ]]; then
+    sed -i -E 's/^([[:space:]]*)worker_connections[[:space:]]+[0-9]+;/\1worker_connections 16384;/' /etc/nginx/nginx.conf
+fi
+grep -qE '^[[:space:]]*worker_rlimit_nofile' /etc/nginx/nginx.conf || sed -i '1i worker_rlimit_nofile 65536;' /etc/nginx/nginx.conf
 # Wire the top-level stream {} include into nginx.conf once.
 if ! grep -q "stream-conf.d" /etc/nginx/nginx.conf; then
     cat >> /etc/nginx/nginx.conf <<'NGX'

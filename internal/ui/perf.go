@@ -4,7 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -13,15 +15,38 @@ import (
 	"github.com/macrodigital283/lightxray/internal/db"
 )
 
-// defaultWorkerConn is nginx's stock baseline and the "off" state for the
-// Performance page — ~500 concurrent WS users on 2 cores. Raising it lifts the
-// per-node ceiling on a large server; leaving it default keeps nginx stock.
-const defaultWorkerConn = 1024
+// defaultWorkerConn is the safe baseline install.sh sets (v8). The distro
+// default of 768 was far too low: Cloudflare opens a separate origin
+// connection per WS from each edge PoP, so a node's connection count runs well
+// above its user count and exhausts 768 quickly (this took k64 down). 16384 ×
+// cores leaves ample headroom; the page lets you raise it further.
+const defaultWorkerConn = 16384
 
-// slotsPerWSUser — a single customer WS transits nginx TWICE (the :443 stream
+// slotsPerWSConn — a single WS connection transits nginx TWICE (the :443 stream
 // SNI router AND the :8443 http backend), and nginx counts every socket
 // (client + upstream) against worker_connections: 2 in stream + 2 in http.
-const slotsPerWSUser = 4
+// NB: one customer = SEVERAL WS connections (one per Cloudflare edge PoP +
+// per device), so the connection ceiling is well above this in "users".
+const slotsPerWSConn = 4
+
+// workerConnRE pulls the live worker_connections out of nginx.conf — the
+// source of truth, so the page reflects reality (not just a DB record).
+var workerConnRE = regexp.MustCompile(`(?m)^\s*worker_connections\s+(\d+);`)
+
+// readNginxWorkerConn returns the worker_connections value from nginx.conf, or
+// 0 if it can't be read/parsed.
+func readNginxWorkerConn() int {
+	b, err := os.ReadFile("/etc/nginx/nginx.conf")
+	if err != nil {
+		return 0
+	}
+	m := workerConnRE.FindSubmatch(b)
+	if m == nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(string(m[1]))
+	return n
+}
 
 // perfView is what the Performance page renders.
 type perfView struct {
@@ -37,17 +62,21 @@ type perfView struct {
 // currentPerf reads the desired worker_connections from the DB (absent =
 // stock default) and computes the rough capacity estimate.
 func (u *UI) currentPerf(r *http.Request) perfView {
-	wc := defaultWorkerConn
-	if v, _ := u.store.GetSetting(r.Context(), db.SettingNginxWorkerConn); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			wc = n
+	// nginx.conf is the source of truth; fall back to the DB record / baseline.
+	wc := readNginxWorkerConn()
+	if wc <= 0 {
+		wc = defaultWorkerConn
+		if v, _ := u.store.GetSetting(r.Context(), db.SettingNginxWorkerConn); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				wc = n
+			}
 		}
 	}
 	cores := runtime.NumCPU()
 	return perfView{
 		WorkerConn: wc,
 		Cores:      cores,
-		EstUsers:   cores * wc / slotsPerWSUser,
+		EstUsers:   cores * wc / slotsPerWSConn,
 		IsDefault:  wc == defaultWorkerConn,
 	}
 }

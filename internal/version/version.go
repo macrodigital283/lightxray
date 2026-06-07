@@ -19,4 +19,7 @@ package version
 //      credential) from the UI, via the lightxray-applyadmin helper.
 // v7 — expiry off-by-one fix: users are now disabled ON their expiry date
 //      (start_date + package_days <= today), not the day after.
-const Number = "7"
+// v8 — raise nginx worker_connections baseline to 16384 (the distro 768 was
+//      far too low — Cloudflare fan-out runs a node's connection count well
+//      above its user count, exhausting it). Perf page reads the real value.
+const Number = "8"

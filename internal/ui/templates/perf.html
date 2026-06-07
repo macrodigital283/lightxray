@@ -11,18 +11,21 @@
     <h1>Performance</h1>
     <p class="dim">
       nginx accepts up to <code>worker_processes × worker_connections</code>
-      simultaneous sockets. Each customer WS uses ~4 (it transits the <code>:443</code>
+      simultaneous sockets. Each WS connection uses ~4 (it transits the <code>:443</code>
       SNI router and the <code>:8443</code> http backend — client + upstream on each).
-      The stock default is plenty for small/medium nodes; raise it on a large
-      server to lift the concurrent-user ceiling.
+      Cloudflare opens a separate origin connection per WS from each edge PoP, so a
+      node's connection count runs well above its user count — the distro default
+      of 768 exhausts fast. The v8 baseline (16384) handles it; raise further only
+      for very large nodes.
     </p>
 
     <section class="card">
       <h2>Current</h2>
-      <p>worker_connections: <code>{{.WorkerConn}}</code>{{if .IsDefault}} <span class="dim">(default — off)</span>{{end}}</p>
+      <p>worker_connections: <code>{{.WorkerConn}}</code>{{if .IsDefault}} <span class="dim">(baseline)</span>{{end}}
+         <span class="dim">— live value from nginx.conf</span></p>
       <p>cores (worker_processes auto): <code>{{.Cores}}</code></p>
-      <p>≈ ceiling: <code>{{.EstUsers}}</code> concurrent WS users
-         <span class="dim">({{.Cores}} × {{.WorkerConn}} ÷ 4)</span></p>
+      <p>≈ ceiling: <code>{{.EstUsers}}</code> concurrent WS connections
+         <span class="dim">({{.Cores}} × {{.WorkerConn}} ÷ 4 sockets/conn; one user = several connections)</span></p>
     </section>
 
     {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
@@ -32,7 +35,7 @@
     <section class="card">
       <h2>Adjust</h2>
       <p class="dim" style="font-size:12.5px">
-        Default <code>1024</code> (off). Raise only on a large server. Applied with a
+        Baseline <code>16384</code>. Raise only for very large nodes. Applied with a
         graceful <code>nginx -s reload</code> — zero downtime. Range 1024–262144.
       </p>
       <form method="post" action="{{$.Prefix}}/ui/perf/" class="vstack">
@@ -43,7 +46,7 @@
         </label>
         <div class="actions">
           <button type="submit">Apply</button>
-          <button type="submit" name="reset" value="1" class="link">reset to default (1024)</button>
+          <button type="submit" name="reset" value="1" class="link">reset to baseline (16384)</button>
         </div>
       </form>
     </section>
