@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -82,6 +83,44 @@ func (d Deps) adminListUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// cursorDelta mirrors reconciler.delta: the increment prev→cur, or — if the
+// counter dropped because xray restarted — cur treated as the delta itself.
+func cursorDelta(prev, cur int64) int64 {
+	if cur >= prev {
+		return cur - prev
+	}
+	return cur
+}
+
+// liveUsageBytes returns dbUsage topped up with the bytes still sitting in
+// xray's live counters that the reconciler hasn't persisted yet (everything
+// since the last stats_cursor write, up to one reconcile period). This makes
+// GET user authoritative-to-the-second instead of up-to-ReconcilePeriod
+// stale — critical for the pool, which reads usage via GET user immediately
+// before deleting a rotated key, so any unsynced tail would otherwise be
+// lost forever on that delete (systematic under-count, worst for keys that
+// rotate often).
+//
+// READ-ONLY by design: it does NOT AddUsage or advance the stats_cursor, so
+// the reconciler stays the sole writer and there's no double-count race with
+// a concurrent tick. On any xray/db hiccup it falls back to the plain DB
+// value, so it's never worse than before.
+func (d Deps) liveUsageBytes(ctx context.Context, id uuid.UUID, dbUsage int64) int64 {
+	up, down, err := d.xc.PerUserTraffic(ctx, id)
+	if err != nil {
+		return dbUsage
+	}
+	cur, err := d.store.GetCursor(ctx, id)
+	if err != nil {
+		return dbUsage
+	}
+	pending := cursorDelta(cur.LastUplink, up) + cursorDelta(cur.LastDownlink, down)
+	if pending < 0 {
+		pending = 0
+	}
+	return dbUsage + pending
+}
+
 // adminGetUser — GET /api/v2/admin/user/{uuid}/
 func (d Deps) adminGetUser(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathUUID(r, "uuid", w)
@@ -100,6 +139,10 @@ func (d Deps) adminGetUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "get user failed")
 		return
 	}
+	// Top up with un-synced live xray bytes so the pool's settle (which reads
+	// here right before deleting a rotated key) bills the true final usage,
+	// not a value up to one reconcile period stale.
+	u.UsageBytes = d.liveUsageBytes(ctx, id, u.UsageBytes)
 	writeJSON(w, http.StatusOK, toResponse(u))
 }
 

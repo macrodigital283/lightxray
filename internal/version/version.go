@@ -22,4 +22,8 @@ package version
 // v8 — raise nginx worker_connections baseline to 16384 (the distro 768 was
 //      far too low — Cloudflare fan-out runs a node's connection count well
 //      above its user count, exhausting it). Perf page reads the real value.
-const Number = "8"
+// v9 — usage accuracy: GET user now tops up the DB usage_bytes with the
+//      un-synced live xray counters (read-only, no cursor write) so the pool
+//      bills the true usage when it reads-then-deletes a rotated key. Fixes a
+//      systematic under-count that grew with per-device key rotation.
+const Number = "9"
