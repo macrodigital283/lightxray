@@ -26,4 +26,12 @@ package version
 //      un-synced live xray counters (read-only, no cursor write) so the pool
 //      bills the true usage when it reads-then-deletes a rotated key. Fixes a
 //      systematic under-count that grew with per-device key rotation.
-const Number = "9"
+// v10 — deploy: update_lightxray.py now REGENERATES the nginx http backend
+//       (/etc/nginx/conf.d/lightxray-http.conf) from the template on every roll,
+//       so the generated config can no longer drift behind the binary. Retrofits
+//       the one-click admin login route (/<admin_path>/<admin_uuid>) and the v2
+//       TLS-session-resumption block onto nodes that were updated binary-only and
+//       silently missed them. Regen uses the node's existing config.env values,
+//       so data-plane routes stay byte-identical — graceful reload, no customer
+//       impact. (Root cause of w46's one-click ERR_HTTP2_PROTOCOL_ERROR.)
+const Number = "10"

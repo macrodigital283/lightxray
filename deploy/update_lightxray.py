@@ -13,11 +13,15 @@ Per node it:
   - raises nginx worker_connections to the 16384 baseline (RAISE-ONLY, so a
     higher operator value is preserved) + worker_rlimit_nofile, nginx -t,
     graceful reload (auto-revert on failure)
+  - regenerates the nginx http backend (lightxray-http.conf) from the template
+    using the node's own config.env values — retrofits new template blocks
+    (one-click admin login, TLS session resumption) with data-plane routes
+    byte-identical; folded into the same nginx -t + graceful reload (auto-revert)
   - applies CPUWeight live (set-property) and restarts ONLY lightxrayd
     (re-hydrates users; xray is NOT restarted, so live connections are fine)
 
-It never restarts xray and never regenerates the customer-facing nginx/xray
-config, so customers see at most a ~2s dashboard blip and nothing else.
+It never restarts xray and never regenerates the xray data-plane config (nor any
+DB-backed path), so customers see at most a ~2s dashboard blip and nothing else.
 
 Usage:
     pip install paramiko
@@ -74,13 +78,36 @@ elif [ "$WC" -lt 16384 ]; then
   sed -i -E 's/^([[:space:]]*)worker_connections[[:space:]]+[0-9]+;/\1worker_connections 16384;/' /etc/nginx/nginx.conf
 fi
 grep -qE '^[[:space:]]*worker_rlimit_nofile' /etc/nginx/nginx.conf || sed -i '1i worker_rlimit_nofile 65536;' /etc/nginx/nginx.conf
-if nginx -t 2>/dev/null; then systemctl reload nginx; NG=ok; else cp -af /etc/nginx/nginx.conf.lxbak /etc/nginx/nginx.conf; systemctl reload nginx 2>/dev/null; NG=reverted; fi
+# v10: regenerate the nginx http backend from the freshly-pulled template so the
+# generated config can't drift behind the binary. Same config.env values =>
+# data-plane routes byte-identical; only new template blocks (one-click admin
+# login, TLS session resumption) get added. Guarded against bad renders, and
+# folded into the SAME nginx -t + graceful reload below (auto-reverts on failure).
+HTTP=/etc/nginx/conf.d/lightxray-http.conf
+TMPL="$SRC/deploy/nginx/lightxray.conf.tmpl"
+HR=skip
+if [ -f "$TMPL" ] && [ -f "$HTTP" ]; then
+  set -a; . /etc/lightxray/config.env 2>/dev/null; set +a
+  if [ -n "${LX_ADMIN_PROXY_PATH:-}" ] && [ -n "${LX_CLIENT_PROXY_PATH:-}" ] && [ -n "${LX_VLESS_WS_PATH:-}" ] && [ -n "${LX_VLESS_GRPC_SERVICE:-}" ]; then
+    cp -af "$HTTP" "$HTTP.lxbak"
+    sed -e "s|__LX_DOMAIN__|${LX_PUBLIC_HOST:-_}|g" \
+        -e "s|__LX_ADMIN_PROXY_PATH__|${LX_ADMIN_PROXY_PATH}|g" \
+        -e "s|__LX_CLIENT_PROXY_PATH__|${LX_CLIENT_PROXY_PATH}|g" \
+        -e "s|__LX_VLESS_WS_PATH__|${LX_VLESS_WS_PATH}|g" \
+        -e "s|__LX_VLESS_GRPC_SERVICE__|${LX_VLESS_GRPC_SERVICE}|g" \
+        "$TMPL" > "$HTTP.new" 2>/dev/null
+    if [ -s "$HTTP.new" ] && ! grep -q '__LX_' "$HTTP.new"; then
+      if cmp -s "$HTTP.new" "$HTTP"; then HR=nochange; rm -f "$HTTP.new"; else mv -f "$HTTP.new" "$HTTP"; HR=regen; fi
+    else HR=badrender; rm -f "$HTTP.new"; fi
+  else HR=novars; fi
+fi
+if nginx -t 2>/dev/null; then systemctl reload nginx; NG=ok; else cp -af /etc/nginx/nginx.conf.lxbak /etc/nginx/nginx.conf; [ -f "$HTTP.lxbak" ] && cp -af "$HTTP.lxbak" "$HTTP"; systemctl reload nginx 2>/dev/null; NG=reverted; HR="$HR-revert"; fi
 systemctl set-property xray.service CPUWeight=400 2>/dev/null || true
 systemctl set-property nginx.service CPUWeight=400 2>/dev/null || true
 systemctl set-property lightxrayd.service CPUWeight=40 2>/dev/null || true
 systemctl restart lightxrayd; sleep 3
 WCF=$(sed -nE 's/^[[:space:]]*worker_connections[[:space:]]+([0-9]+);.*/\1/p' /etc/nginx/nginx.conf | head -1)
-echo "RESULT|ok|$SHA|wc:${WC:-?}->$WCF,ng:$NG|lxd:$(systemctl is-active lightxrayd),nr:$(systemctl show -p NRestarts --value lightxrayd)|nginx:$(systemctl is-active nginx),xray:$(systemctl is-active xray)"
+echo "RESULT|ok|$SHA|wc:${WC:-?}->$WCF,ng:$NG,http:$HR|lxd:$(systemctl is-active lightxrayd),nr:$(systemctl show -p NRestarts --value lightxrayd)|nginx:$(systemctl is-active nginx),xray:$(systemctl is-active xray)"
 '''
 
 
