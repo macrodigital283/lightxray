@@ -14,9 +14,16 @@ import (
 // proxy-group so the client picks the fastest edge.
 //
 // `hosts` is the structured cdn_hosts table; each row carries its own
-// transport choice (ws / grpc / both). Empty hosts → no WS proxies (the
-// grey-cloud PublicHost is never emitted as a key); the profile then
+// transport choice (ws / grpc / both / xhttp). Empty hosts → no WS proxies
+// (the grey-cloud PublicHost is never emitted as a key); the profile then
 // carries only Reality if enabled, falling back to DIRECT otherwise.
+//
+// XHTTP-transport hosts are intentionally NOT emitted here: mihomo's
+// SplitHTTP YAML schema has shifted across versions and a wrong shape can
+// fail the whole profile parse, whereas the base64 vless:// bundle (what
+// Happ / v2rayNG consume) has stable XHTTP support. So an xhttp host
+// appears in /sub/ but is omitted from the Clash profile until a
+// Clash-family client needs it.
 func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) string {
 	name := safeName(displayName, "lightxray")
 	// cfg.VLESSWSPath is the FULL path the caller resolved (per_user or
@@ -63,6 +70,8 @@ func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, reality RealityConfig
 			proxyNames = append(proxyNames, pname)
 			writeClashGRPCProxy(&b, cfg, h.Hostname, name, userUUID)
 		}
+		// db.TransportXHTTP is deliberately skipped here — see the function
+		// doc. xhttp hosts ride the base64 vless:// sub, not the Clash YAML.
 	}
 	if reality.HasValue() {
 		pname := realityProxyName(reality.Host, name)

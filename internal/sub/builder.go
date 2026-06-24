@@ -15,11 +15,10 @@ import (
 )
 
 // Build returns the base64 bundle a customer's V2Ray client will pull
-// from `/<client_proxy_path>/<uuid>/sub/`. Emits one or two vless:// URLs
-// per CDN host depending on the host's transport ("ws", "grpc", or
-// "both"); empty `hosts` falls back to a single WS URL on PublicHost.
-// If `reality.Enabled` is on it appends an extra direct-IP Reality URL
-// to the bundle.
+// from `/<client_proxy_path>/<uuid>/sub/`. Emits one or more vless:// URLs
+// per CDN host depending on the host's transport ("ws", "grpc", "both",
+// or "xhttp"); empty `hosts` produces no CDN keys. If `reality.Enabled`
+// is on it appends an extra direct-IP Reality URL to the bundle.
 func Build(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) string {
 	lines := buildLines(cfg, hosts, reality, userUUID, displayName)
 	bundle := strings.Join(lines, "\n") + "\n"
@@ -34,11 +33,12 @@ func BuildPlain(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, us
 
 // buildLines walks hosts × transport-modes and produces a vless URL per
 // combination, then appends one Reality URL if Reality is enabled.
-// Operator-set transport modes:
+// Operator-set transport modes (per CDN host):
 //
 //	ws    → vlessWSTLS only
 //	grpc  → vlessGRPC only
-//	both  → both, WS first (V2Ray clients prefer the first valid server)
+//	both  → WS + gRPC, WS first (V2Ray clients prefer the first valid server)
+//	xhttp → vlessXHTTP only (SplitHTTP; needs the XHTTP master switch on)
 //
 // IMPORTANT: PublicHost (the grey-cloud management/sub-fetch domain) is
 // NEVER used for a WS key — that would expose the unfronted origin IP
@@ -64,9 +64,13 @@ func buildLines(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, us
 		if grpcOn && (h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth) {
 			lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
 		}
-		// XHTTP isn't part of the per-host transport enum — when enabled it
-		// rides every CDN front (using the global LX_VLESS_XHTTP_PATH).
-		if xhttpOn {
+		// XHTTP is a first-class per-host pick: a host set to "xhttp" emits
+		// one VLESS+XHTTP (SplitHTTP) key on the global LX_VLESS_XHTTP_PATH
+		// and nothing else. xhttpOn is the Transports-page master switch —
+		// it also gates xray user-registration on vless-xhttp-in and needs
+		// LX_VLESS_XHTTP_PATH set — so a host is only served over XHTTP when
+		// that inbound is actually live.
+		if xhttpOn && h.Transport == db.TransportXHTTP {
 			lines = append(lines, vlessXHTTP(cfg, h.Hostname, userUUID, displayName))
 		}
 	}

@@ -42,4 +42,10 @@ package version
 //       mode=packet-up) as a CDN-frontable transport that blends as plain HTTP —
 //       the answer to ISP IP-blocking that kills direct Reality and to Cloudflare
 //       flagging long-lived WS tunnels as HTTP DDoS.
-const Number = "11"
+// v12 — CDN hosts page: XHTTP is now a first-class per-host transport pick
+//       (WS / gRPC / Both / XHTTP) instead of riding every host globally.
+//       A host set to "xhttp" emits only its VLESS+XHTTP key; the Transports
+//       page XHTTP toggle stays the master switch (gates the xray inbound).
+//       Lets an operator mix transports per CDN front — e.g. WS for the
+//       iOS-Happ-facing hosts, XHTTP for the Android/throttle-resistant ones.
+const Number = "12"

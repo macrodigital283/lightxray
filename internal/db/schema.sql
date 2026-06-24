@@ -47,12 +47,14 @@ CREATE TABLE IF NOT EXISTS cdn_hosts (
 );
 CREATE INDEX IF NOT EXISTS cdn_hosts_enabled_idx ON cdn_hosts (enabled);
 
--- Per-host transport pick. Allowed: 'ws', 'grpc', 'both'. Added in a
--- separate ALTER so older deployments upgrade in place.
+-- Per-host transport pick. Allowed: 'ws', 'grpc', 'both', 'xhttp'. Added
+-- in a separate ALTER so older deployments upgrade in place. The
+-- DROP-then-ADD makes the allowed-set widening idempotent on every boot,
+-- so adding 'xhttp' here auto-migrates existing nodes at next start.
 ALTER TABLE cdn_hosts ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT 'ws';
 ALTER TABLE cdn_hosts DROP CONSTRAINT IF EXISTS cdn_hosts_transport_chk;
 ALTER TABLE cdn_hosts ADD CONSTRAINT cdn_hosts_transport_chk
-    CHECK (transport IN ('ws', 'grpc', 'both'));
+    CHECK (transport IN ('ws', 'grpc', 'both', 'xhttp'));
 
 -- Singleton key-value config edited from the dashboard.
 -- Reality-related entries seeded by install.sh after keypair generation:

@@ -14,16 +14,19 @@ type CDNHost struct {
 	ID        int64
 	Hostname  string
 	Enabled   bool
-	Transport string // "ws" | "grpc" | "both"
+	Transport string // "ws" | "grpc" | "both" | "xhttp"
 	CreatedAt time.Time
 }
 
 // Transport mode constants. Values must match the CHECK constraint in
-// schema.sql; if a third option is added, update both.
+// schema.sql; if another option is added, update both. "xhttp" emits a
+// single VLESS+XHTTP (SplitHTTP) key for the host and requires the XHTTP
+// inbound to be enabled on the Transports page (its master switch).
 const (
-	TransportWS   = "ws"
-	TransportGRPC = "grpc"
-	TransportBoth = "both"
+	TransportWS    = "ws"
+	TransportGRPC  = "grpc"
+	TransportBoth  = "both"
+	TransportXHTTP = "xhttp"
 )
 
 // ListCDNHosts returns every row, ordered by id for stable display.
@@ -86,7 +89,7 @@ func (s *Store) ListEnabledCDNHostnames(ctx context.Context) ([]string, error) {
 // a friendly error in the UI before the DB layer would reject it.
 func (s *Store) SetCDNHostTransport(ctx context.Context, id int64, transport string) error {
 	switch transport {
-	case TransportWS, TransportGRPC, TransportBoth:
+	case TransportWS, TransportGRPC, TransportBoth, TransportXHTTP:
 	default:
 		return errors.New("invalid transport: " + transport)
 	}
