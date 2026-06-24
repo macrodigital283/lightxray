@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,9 +47,17 @@ import (
 // user is reachable via every transport (WS, gRPC, Reality) without
 // the operator manually picking which to register.
 type Client struct {
-	conn        *grpc.ClientConn
-	handler     proxymancmd.HandlerServiceClient
-	stats       statscmd.StatsServiceClient
+	conn    *grpc.ClientConn
+	handler proxymancmd.HandlerServiceClient
+	stats   statscmd.StatsServiceClient
+
+	// inboundTags is the set of tags AddUser/RemoveUser/HydrateFromDB fan
+	// out to. It's MUTABLE at runtime: the Transports dashboard enables or
+	// disables a transport by adding/removing its tag here (via EnableTag/
+	// DisableTag), so newly-created users and post-restart hydration only
+	// land on the transports the operator currently has on. Guarded by mu
+	// because the reconciler/handlers call AddUser concurrently with toggles.
+	mu          sync.RWMutex
 	inboundTags []string
 }
 
@@ -135,27 +144,94 @@ func (c *Client) Close() error {
 // those AddUsers only — WS/gRPC inbounds must keep Flow empty.
 func (c *Client) AddUser(ctx context.Context, userUUID uuid.UUID) error {
 	var lastErr error
-	for _, tag := range c.inboundTags {
-		flow := ""
-		if isRealityTag(tag) {
-			flow = "xtls-rprx-vision"
-		}
-		op := &proxymancmd.AddUserOperation{
-			User: &protocol.User{
-				Level: 0,
-				Email: userUUID.String(),
-				Account: serial.ToTypedMessage(&vless.Account{
-					Id:   userUUID.String(),
-					Flow: flow,
-				}),
-			},
-		}
-		if err := c.alterWithRetry(ctx, tag, op); err != nil {
+	for _, tag := range c.activeTags() {
+		if err := c.AddUserToTag(ctx, userUUID, tag); err != nil {
 			slog.Warn("xray AddUser", "tag", tag, "uuid", userUUID, "err", err)
 			lastErr = err
 		}
 	}
 	return lastErr
+}
+
+// AddUserToTag registers a user on ONE inbound tag (no fan-out across the
+// active set). Used by the Transports toggle to bring a single transport
+// online for every user, and by AddUser per-tag. Reality inbounds need
+// Flow=xtls-rprx-vision; WS/gRPC/XHTTP keep it empty.
+func (c *Client) AddUserToTag(ctx context.Context, userUUID uuid.UUID, tag string) error {
+	flow := ""
+	if isRealityTag(tag) {
+		flow = "xtls-rprx-vision"
+	}
+	op := &proxymancmd.AddUserOperation{
+		User: &protocol.User{
+			Level: 0,
+			Email: userUUID.String(),
+			Account: serial.ToTypedMessage(&vless.Account{
+				Id:   userUUID.String(),
+				Flow: flow,
+			}),
+		},
+	}
+	return c.alterWithRetry(ctx, tag, op)
+}
+
+// RemoveUserFromTag deregisters a user from ONE inbound tag. Used by the
+// Transports toggle to take a single transport offline for every user.
+// NotFound is treated as success by alterWithRetry.
+func (c *Client) RemoveUserFromTag(ctx context.Context, userUUID uuid.UUID, tag string) error {
+	op := &proxymancmd.RemoveUserOperation{Email: userUUID.String()}
+	return c.alterWithRetry(ctx, tag, op)
+}
+
+// activeTags returns a snapshot copy of the current active inbound tag set
+// under the read lock, so callers can range over it without holding mu.
+func (c *Client) activeTags() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]string, len(c.inboundTags))
+	copy(out, c.inboundTags)
+	return out
+}
+
+// EnableTag adds tag to the active set (idempotent) so subsequent AddUser /
+// hydration fans out to it. The caller is responsible for the one-time
+// backfill of existing users onto the newly-enabled tag.
+func (c *Client) EnableTag(tag string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, t := range c.inboundTags {
+		if t == tag {
+			return
+		}
+	}
+	c.inboundTags = append(c.inboundTags, tag)
+}
+
+// DisableTag removes tag from the active set (idempotent) so future AddUser /
+// hydration skip it. The caller is responsible for removing existing users
+// from the now-disabled tag.
+func (c *Client) DisableTag(tag string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := c.inboundTags[:0:0]
+	for _, t := range c.inboundTags {
+		if t != tag {
+			out = append(out, t)
+		}
+	}
+	c.inboundTags = out
+}
+
+// HasTag reports whether tag is currently in the active set.
+func (c *Client) HasTag(tag string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, t := range c.inboundTags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // isRealityTag identifies an inbound tag that's serving Reality, so we
@@ -171,9 +247,8 @@ func isRealityTag(tag string) bool {
 // expectations).
 func (c *Client) RemoveUser(ctx context.Context, userUUID uuid.UUID) error {
 	var lastErr error
-	for _, tag := range c.inboundTags {
-		op := &proxymancmd.RemoveUserOperation{Email: userUUID.String()}
-		if err := c.alterWithRetry(ctx, tag, op); err != nil {
+	for _, tag := range c.activeTags() {
+		if err := c.RemoveUserFromTag(ctx, userUUID, tag); err != nil {
 			slog.Warn("xray RemoveUser", "tag", tag, "uuid", userUUID, "err", err)
 			lastErr = err
 		}

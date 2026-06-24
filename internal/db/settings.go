@@ -27,7 +27,24 @@ const (
 	// page. Absent/empty = the stock 1024 baseline ("off"); a larger number
 	// raises the concurrent-connection ceiling on a large server.
 	SettingNginxWorkerConn = "nginx_worker_connections"
+
+	// Per-transport on/off, set from the dashboard Transports page. "true"/
+	// "false"; ABSENT means "fall back to whether the inbound tag is in
+	// LX_XRAY_INBOUND_TAG" so existing nodes keep their current transports
+	// until the operator first toggles. When a transport is off, its users
+	// are removed from the xray inbound AND its URL is dropped from the
+	// subscription bundle.
+	SettingTransportWSEnabled    = "transport_ws_enabled"
+	SettingTransportGRPCEnabled  = "transport_grpc_enabled"
+	SettingTransportXHTTPEnabled = "transport_xhttp_enabled"
 )
+
+// TransportTag maps each toggle setting key to its xray inbound tag.
+var TransportTag = map[string]string{
+	SettingTransportWSEnabled:    "vless-ws-in",
+	SettingTransportGRPCEnabled:  "vless-grpc-in",
+	SettingTransportXHTTPEnabled: "vless-xhttp-in",
+}
 
 // GetSetting returns the stored value or "" if absent (NOT an error —
 // makes callers' default-value paths cleaner: `v, _ := store.GetSetting(...)`

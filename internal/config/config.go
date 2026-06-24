@@ -30,6 +30,7 @@ type Config struct {
 	VLESSPort        int    // 443 in front of Cloudflare
 	VLESSSNI         string // TLS SNI; defaults to PublicHost
 	VLESSWSPath      string // WS path xray listens on
+	VLESSXHTTPPath   string // XHTTP path xray listens on (CDN-frontable); empty = not configured
 	VLESSFlow        string // optional
 	VLESSAlpn        string // optional
 	VLESSGRPCService string // gRPC serviceName (must match xray config)
@@ -67,6 +68,7 @@ func Load() (Config, error) {
 		VLESSPort:       getint("LX_VLESS_PORT", 443),
 		VLESSSNI:        os.Getenv("LX_VLESS_SNI"),
 		VLESSWSPath:     getenv("LX_VLESS_WS_PATH", "/v2ray"),
+		VLESSXHTTPPath:  os.Getenv("LX_VLESS_XHTTP_PATH"),
 		VLESSFlow: os.Getenv("LX_VLESS_FLOW"),
 		// http/1.1 default — WS upgrade is HTTP/1.1-only in the
 		// classic spec (RFC 6455). Advertising it in ALPN locks the

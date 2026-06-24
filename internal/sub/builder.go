@@ -48,19 +48,44 @@ func BuildPlain(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, us
 // return is intentional and valid — the customer's client just shows no
 // WS servers until the operator adds a CDN host or enables Reality.
 func buildLines(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, userUUID, displayName string) []string {
+	// Per-transport on/off is driven by the operator's Transports dashboard,
+	// which rewrites LX_XRAY_INBOUND_TAG (cfg.XrayInboundTag) — the SAME set
+	// that gates xray user-registration. So a transport toggled off here is
+	// both un-served in the bundle AND has no users at the xray layer.
+	wsOn := transportEnabled(cfg, "vless-ws-in")
+	grpcOn := transportEnabled(cfg, "vless-grpc-in")
+	xhttpOn := transportEnabled(cfg, "vless-xhttp-in") && cfg.VLESSXHTTPPath != ""
+
 	var lines []string
 	for _, h := range hosts {
-		if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
+		if wsOn && (h.Transport == db.TransportWS || h.Transport == db.TransportBoth) {
 			lines = append(lines, vlessWSTLS(cfg, h.Hostname, userUUID, displayName))
 		}
-		if h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth {
+		if grpcOn && (h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth) {
 			lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
+		}
+		// XHTTP isn't part of the per-host transport enum — when enabled it
+		// rides every CDN front (using the global LX_VLESS_XHTTP_PATH).
+		if xhttpOn {
+			lines = append(lines, vlessXHTTP(cfg, h.Hostname, userUUID, displayName))
 		}
 	}
 	if reality.HasValue() {
 		lines = append(lines, vlessReality(cfg, reality, userUUID, displayName))
 	}
 	return lines
+}
+
+// transportEnabled reports whether the given xray inbound tag is in the
+// operator's enabled set (cfg.XrayInboundTag, comma-separated). This is the
+// single source of truth the Transports dashboard toggles rewrite.
+func transportEnabled(cfg config.Config, tag string) bool {
+	for _, t := range splitTrim(cfg.XrayInboundTag) {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // vlessWSTLS assembles a single vless:// URI per the de-facto V2Ray

@@ -1,0 +1,64 @@
+{{define "transports_page"}}<!doctype html>
+<html lang="en">
+<head>
+  {{template "_head" .}}
+  <title>transports — {{.Host}}</title>
+</head>
+<body>
+  {{template "_nav" .}}
+  <main>
+    {{with .V}}
+    <h1>Transports</h1>
+    <p class="dim">
+      Turn each VLESS transport on or off. <strong>Off = fully disabled</strong>:
+      its users are removed from the xray inbound (clients on it stop connecting)
+      and its URL is dropped from every customer's subscription bundle. Changes
+      apply <strong>immediately</strong> over the xray API — no restart, and the
+      other transports' live connections are untouched. Reality is managed on its
+      own <a href="{{$.Prefix}}/ui/reality/">reality</a> page.
+    </p>
+
+    {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+    {{if and .Applied .Note}}<p class="flash ok-flash">{{.Note}}</p>{{end}}
+
+    <form method="post" action="{{$.Prefix}}/ui/transports/" class="vstack">
+      <label>
+        <span>WebSocket <em>(ws — CDN-frontable; classic, widely compatible)</em></span>
+        <input type="checkbox" name="ws" {{if .WS}}checked{{end}}>
+      </label>
+      <label>
+        <span>gRPC <em>(grpc — CDN-frontable; HTTP/2 multiplexed)</em></span>
+        <input type="checkbox" name="grpc" {{if .GRPC}}checked{{end}}>
+      </label>
+      <label>
+        <span>XHTTP <em>(xhttp / SplitHTTP — CDN-frontable; blends as plain HTTP, beats WS-tunnel DDoS flags)</em></span>
+        <input type="checkbox" name="xhttp" {{if .XHTTP}}checked{{end}} {{if not .HasXHTTPInbound}}disabled{{end}}>
+      </label>
+      {{if not .HasXHTTPInbound}}
+        <p class="flash error">
+          XHTTP isn't set up on this node yet — <code>LX_VLESS_XHTTP_PATH</code> is unset and there's no
+          <code>vless-xhttp-in</code> inbound in xray. Add it (install.sh on a fresh node bakes it in;
+          existing nodes get it on the next data-plane update) before toggling XHTTP on.
+        </p>
+      {{end}}
+      <div class="actions">
+        <button type="submit">Apply</button>
+      </div>
+    </form>
+
+    <section class="card" style="margin-top:24px">
+      <h2>What "off" does</h2>
+      <p class="dim">
+        Each toggle is stored in the DB and reflected onto xray's live user list:
+        disabling a transport bulk-removes every user from that inbound over the
+        gRPC API (so it stops authenticating anyone), and the subscription builder
+        drops its URL. Enabling re-adds every user. The choice survives restarts —
+        on boot, lightxrayd applies the stored toggles before re-hydrating users.
+        At least one transport must stay enabled.
+      </p>
+    </section>
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}

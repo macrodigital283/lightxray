@@ -34,4 +34,12 @@ package version
 //       silently missed them. Regen uses the node's existing config.env values,
 //       so data-plane routes stay byte-identical — graceful reload, no customer
 //       impact. (Root cause of w46's one-click ERR_HTTP2_PROTOCOL_ERROR.)
-const Number = "10"
+// v11 — dashboard Transports page: per-transport on/off toggles (WS / gRPC /
+//       XHTTP). Turning one off bulk-removes its users from the xray inbound
+//       over the gRPC API AND drops its URL from subscriptions — immediate, no
+//       restart, scoped (other transports untouched), and persisted in DB so it
+//       survives restarts (applied before hydrate). Adds VLESS+XHTTP (SplitHTTP,
+//       mode=packet-up) as a CDN-frontable transport that blends as plain HTTP —
+//       the answer to ISP IP-blocking that kills direct Reality and to Cloudflare
+//       flagging long-lived WS tunnels as HTTP DDoS.
+const Number = "11"

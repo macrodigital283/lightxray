@@ -78,6 +78,21 @@ func main() {
 		if err := xc.WaitReady(ctx); err != nil {
 			return // ctx cancelled — shutting down before xray came up
 		}
+		// Reflect persisted Transports toggles onto the active tag set BEFORE
+		// hydrating: a DB-disabled transport must stay empty across restarts,
+		// and a DB-enabled xhttp transport (often absent from the static env
+		// tag list) must still get its users on hydrate.
+		if m, err := store.GetSettings(ctx,
+			db.SettingTransportWSEnabled, db.SettingTransportGRPCEnabled, db.SettingTransportXHTTPEnabled); err == nil {
+			for key, tag := range db.TransportTag {
+				switch m[key] {
+				case "true":
+					xc.EnableTag(tag)
+				case "false":
+					xc.DisableTag(tag)
+				}
+			}
+		}
 		// xray's user list lives in-process; if xray restarted, our DB is
 		// the source of truth and must be replayed back in.
 		if n, err := xc.HydrateFromDB(ctx, store); err != nil {
