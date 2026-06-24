@@ -48,4 +48,9 @@ package version
 //       page XHTTP toggle stays the master switch (gates the xray inbound).
 //       Lets an operator mix transports per CDN front — e.g. WS for the
 //       iOS-Happ-facing hosts, XHTTP for the Android/throttle-resistant ones.
-const Number = "12"
+// v13 — XHTTP keys now carry alpn=h2: pins the client↔CDN leg to HTTP/2 over
+//       TCP and keeps it off QUIC/h3 (UDP), which mobile-carrier DPI commonly
+//       blocks/throttles. (Also: v12's XHTTP nginx route moved into a
+//       glob-included snippet so update_lightxray.py's http-backend regen can
+//       no longer wipe it.)
+const Number = "13"
