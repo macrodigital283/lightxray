@@ -101,6 +101,31 @@ if [ -f "$TMPL" ] && [ -f "$HTTP" ]; then
     else HR=badrender; rm -f "$HTTP.new"; fi
   else HR=novars; fi
 fi
+# XHTTP (VLESS SplitHTTP) data-plane route lives in an nginx snippet that the
+# template glob-includes, so the http-backend regen above can't wipe it (a
+# manual in-server-block location was getting clobbered on every roll).
+# (Re)write it from LX_VLESS_XHTTP_PATH; boxes without XHTTP configured skip it.
+set -a; . /etc/lightxray/config.env 2>/dev/null; set +a
+if [ -n "${LX_VLESS_XHTTP_PATH:-}" ]; then
+  mkdir -p /etc/nginx/snippets
+  cat > /etc/nginx/snippets/lightxray-xhttp.conf <<XEOF
+# lightxray XHTTP (VLESS SplitHTTP) -> vless-xhttp-in. Managed by update_lightxray.py.
+location ${LX_VLESS_XHTTP_PATH} {
+    proxy_pass http://127.0.0.1:10002;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    client_max_body_size 0;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+XEOF
+  HR="$HR+xhttp"
+fi
 if nginx -t 2>/dev/null; then systemctl reload nginx; NG=ok; else cp -af /etc/nginx/nginx.conf.lxbak /etc/nginx/nginx.conf; [ -f "$HTTP.lxbak" ] && cp -af "$HTTP.lxbak" "$HTTP"; systemctl reload nginx 2>/dev/null; NG=reverted; HR="$HR-revert"; fi
 systemctl set-property xray.service CPUWeight=400 2>/dev/null || true
 systemctl set-property nginx.service CPUWeight=400 2>/dev/null || true

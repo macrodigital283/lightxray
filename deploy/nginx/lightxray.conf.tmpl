@@ -109,6 +109,13 @@ server {
         proxy_send_timeout 86400s;
     }
 
+    # XHTTP (VLESS SplitHTTP) data plane — the actual location block lives in a
+    # snippet that update_lightxray.py (re)writes from LX_VLESS_XHTTP_PATH on
+    # each roll, so the http-backend regen can't wipe it (a manual location in
+    # this server block was getting clobbered every roll). The trailing glob
+    # makes the include optional: boxes without XHTTP match no file and skip it.
+    include /etc/nginx/snippets/lightxray-xhttp*.conf;
+
     # everything else — generic close (anti-fingerprinting)
     location / { return 444; }
 }
