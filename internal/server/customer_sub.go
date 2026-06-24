@@ -141,6 +141,41 @@ func (d Deps) effectiveCfg(r *http.Request, userUUID string) config.Config {
 		// preserve the original "/<client>/<uuid>/v2ray" shape
 		c.VLESSWSPath = "/" + c.ClientProxyPath + "/" + userUUID + d.cfg.VLESSWSPath
 	}
+
+	// Reflect the per-transport on/off toggles (Transports dashboard) into
+	// XrayInboundTag so the sub builder emits only enabled transports. An
+	// unset setting falls back to the static env membership — existing nodes
+	// keep their transports until the operator first toggles.
+	m, _ := d.store.GetSettings(ctx,
+		db.SettingTransportWSEnabled, db.SettingTransportGRPCEnabled, db.SettingTransportXHTTPEnabled)
+	envHas := func(tag string) bool {
+		for _, t := range strings.Split(d.cfg.XrayInboundTag, ",") {
+			if strings.TrimSpace(t) == tag {
+				return true
+			}
+		}
+		return false
+	}
+	enabled := func(key, tag string) bool {
+		if v, ok := m[key]; ok {
+			return v == "true"
+		}
+		return envHas(tag)
+	}
+	var tags []string
+	if enabled(db.SettingTransportWSEnabled, "vless-ws-in") {
+		tags = append(tags, "vless-ws-in")
+	}
+	if enabled(db.SettingTransportGRPCEnabled, "vless-grpc-in") {
+		tags = append(tags, "vless-grpc-in")
+	}
+	if enabled(db.SettingTransportXHTTPEnabled, "vless-xhttp-in") {
+		tags = append(tags, "vless-xhttp-in")
+	}
+	if envHas("vless-reality-in") {
+		tags = append(tags, "vless-reality-in") // reality emission is gated separately by its own settings
+	}
+	c.XrayInboundTag = strings.Join(tags, ",")
 	return c
 }
 

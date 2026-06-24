@@ -11,14 +11,15 @@
     <h1>Transports</h1>
     <p class="dim">
       Turn each VLESS transport on or off. <strong>Off = fully disabled</strong>:
-      its inbound loses all users (existing clients on it drop) and its URL is
-      dropped from every customer's subscription bundle. Toggling applies by
-      restarting xray + lightxrayd, so all live connections briefly reconnect.
-      Reality is managed on its own <a href="{{$.Prefix}}/ui/reality/">reality</a> page.
+      its users are removed from the xray inbound (clients on it stop connecting)
+      and its URL is dropped from every customer's subscription bundle. Changes
+      apply <strong>immediately</strong> over the xray API — no restart, and the
+      other transports' live connections are untouched. Reality is managed on its
+      own <a href="{{$.Prefix}}/ui/reality/">reality</a> page.
     </p>
 
     {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
-    {{if .Applied}}<p class="flash ok-flash">Applied. xray + lightxrayd are restarting — refresh in a few seconds.</p>{{end}}
+    {{if and .Applied .Note}}<p class="flash ok-flash">{{.Note}}</p>{{end}}
 
     <form method="post" action="{{$.Prefix}}/ui/transports/" class="vstack">
       <label>
@@ -45,21 +46,15 @@
       </div>
     </form>
 
-    {{if .Output}}
-    <section class="card" style="margin-top:24px">
-      <h2>Apply output</h2>
-      <pre class="copy">{{.Output}}</pre>
-    </section>
-    {{end}}
-
     <section class="card" style="margin-top:24px">
       <h2>What "off" does</h2>
       <p class="dim">
-        Each toggle adds/removes its inbound tag from <code>LX_XRAY_INBOUND_TAG</code>.
-        On apply, xray restarts (clearing its in-memory users) and lightxrayd re-hydrates
-        users onto only the enabled inbounds — so a disabled transport stops authenticating
-        anyone. The subscription builder reads the same set, so disabled transports vanish
-        from <code>/sub/</code> bundles too. At least one transport must stay enabled.
+        Each toggle is stored in the DB and reflected onto xray's live user list:
+        disabling a transport bulk-removes every user from that inbound over the
+        gRPC API (so it stops authenticating anyone), and the subscription builder
+        drops its URL. Enabling re-adds every user. The choice survives restarts —
+        on boot, lightxrayd applies the stored toggles before re-hydrating users.
+        At least one transport must stay enabled.
       </p>
     </section>
     {{end}}
