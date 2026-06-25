@@ -57,4 +57,9 @@ package version
 //       hosts) emits BOTH a WS key and an XHTTP key per host, so iOS clients
 //       ride WS and Android ride XHTTP off the same domain — one host serves
 //       every platform. Degrades to WS-only on boxes with XHTTP disabled.
-const Number = "14"
+// v15 — default transport set is now WS + XHTTP + Reality (gRPC OFF by default)
+//       — LX_XRAY_INBOUND_TAG default + install.sh. Affects NEW installs and the
+//       Transports-page fallback only; existing nodes keep their config.env tag.
+//       Safe on non-XHTTP boxes: AddUser tolerates the absent inbound and the
+//       builder still gates XHTTP keys on LX_VLESS_XHTTP_PATH.
+const Number = "15"
