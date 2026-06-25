@@ -62,4 +62,9 @@ package version
 //       Transports-page fallback only; existing nodes keep their config.env tag.
 //       Safe on non-XHTTP boxes: AddUser tolerates the absent inbound and the
 //       builder still gates XHTTP keys on LX_VLESS_XHTTP_PATH.
-const Number = "15"
+// v16 — default transport set trimmed to WS + XHTTP only (Reality dropped from
+//       the default tag too). Reality emission was already off-by-default
+//       (reality_enabled); this also stops registering users on the idle
+//       Reality inbound. New installs only; existing nodes keep their tag.
+//       Re-enabling Reality later needs vless-reality-in added back to the tag.
+const Number = "16"
