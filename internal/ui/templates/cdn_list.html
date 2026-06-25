@@ -50,10 +50,11 @@
               <td>
                 <form method="post" action="{{$.Prefix}}/ui/cdn/{{.ID}}/transport" class="inline-select">
                   <select name="transport" onchange="this.form.submit()">
-                    <option value="ws"    {{if eq .Transport "ws"}}selected{{end}}>WS</option>
-                    <option value="grpc"  {{if eq .Transport "grpc"}}selected{{end}}>gRPC</option>
-                    <option value="both"  {{if eq .Transport "both"}}selected{{end}}>Both</option>
-                    <option value="xhttp" {{if eq .Transport "xhttp"}}selected{{end}}>XHTTP</option>
+                    <option value="wsxhttp" {{if eq .Transport "wsxhttp"}}selected{{end}}>WS+XHTTP</option>
+                    <option value="ws"      {{if eq .Transport "ws"}}selected{{end}}>WS</option>
+                    <option value="xhttp"   {{if eq .Transport "xhttp"}}selected{{end}}>XHTTP</option>
+                    <option value="grpc"    {{if eq .Transport "grpc"}}selected{{end}}>gRPC</option>
+                    <option value="both"    {{if eq .Transport "both"}}selected{{end}}>Both</option>
                   </select>
                   <noscript><button type="submit" class="link">save</button></noscript>
                 </form>
@@ -74,15 +75,16 @@
         </tbody>
       </table>
       <p class="dim" style="margin-top:14px;font-size:12.5px">
-        Transport modes: <strong>WS</strong> = WebSocket (Hiddify-style, works through any CDN that
-        supports WebSockets). <strong>gRPC</strong> = HTTP/2-based; needs <em>Cloudflare → Network →
-        gRPC: On</em> and a different bundled URL shape. <strong>Both</strong> emits a WS link <em>and</em>
-        a gRPC link per user so clients can fall back if one transport gets throttled.
-        <strong>XHTTP</strong> = SplitHTTP — tunnels as ordinary HTTP requests, so it blends into
-        normal web traffic and survives CDN edges that flag a long-lived WS tunnel as an HTTP DDoS.
-        It requires the XHTTP inbound switched on under <em>Transports</em>, and is carried only in
-        the base64 <code>vless://</code> bundle (Android Happ / v2rayNG / NekoBox) — iOS Happ doesn't
-        support XHTTP yet, and it's omitted from Clash profiles.
+        Transport modes: <strong>WS+XHTTP</strong> (default) emits <em>both</em> a WS key and an XHTTP
+        key per host — <strong>iOS clients ride WS, Android ride XHTTP</strong>, off the same domain, so
+        one host serves every platform. On a box with XHTTP off it degrades to WS-only.
+        <strong>WS</strong> = WebSocket (Hiddify-style, works through any CDN that supports WebSockets);
+        rock-solid on iOS. <strong>XHTTP</strong> = SplitHTTP — tunnels as ordinary HTTP requests, so it
+        blends into normal web traffic and survives CDN edges that flag a long-lived WS tunnel as an HTTP
+        DDoS; best for Android (iOS Happ can't sustain it under load). XHTTP needs the XHTTP inbound on
+        under <em>Transports</em> and is carried only in the base64 <code>vless://</code> bundle (omitted
+        from Clash). <strong>gRPC</strong> = HTTP/2-based; needs <em>Cloudflare → Network → gRPC: On</em>.
+        <strong>Both</strong> = WS + gRPC.
       </p>
     {{end}}
   </main>

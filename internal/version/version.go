@@ -53,4 +53,8 @@ package version
 //       blocks/throttles. (Also: v12's XHTTP nginx route moved into a
 //       glob-included snippet so update_lightxray.py's http-backend regen can
 //       no longer wipe it.)
-const Number = "13"
+// v14 — CDN hosts: new "WS+XHTTP" per-host transport (now the default for new
+//       hosts) emits BOTH a WS key and an XHTTP key per host, so iOS clients
+//       ride WS and Android ride XHTTP off the same domain — one host serves
+//       every platform. Degrades to WS-only on boxes with XHTTP disabled.
+const Number = "14"

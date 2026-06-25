@@ -58,19 +58,23 @@ func buildLines(cfg config.Config, hosts []db.CDNHost, reality RealityConfig, us
 
 	var lines []string
 	for _, h := range hosts {
-		if wsOn && (h.Transport == db.TransportWS || h.Transport == db.TransportBoth) {
+		// "wsxhttp" emits BOTH a WS and an XHTTP key for the host, so iOS
+		// clients (which can't sustain XHTTP under load) ride WS while
+		// Android rides XHTTP — off the same domain. Each leg is still gated
+		// by its own master switch, so on a box with XHTTP off, "wsxhttp"
+		// degrades to WS-only.
+		if wsOn && (h.Transport == db.TransportWS || h.Transport == db.TransportBoth || h.Transport == db.TransportWSXHTTP) {
 			lines = append(lines, vlessWSTLS(cfg, h.Hostname, userUUID, displayName))
 		}
 		if grpcOn && (h.Transport == db.TransportGRPC || h.Transport == db.TransportBoth) {
 			lines = append(lines, vlessGRPC(cfg, h.Hostname, userUUID, displayName))
 		}
-		// XHTTP is a first-class per-host pick: a host set to "xhttp" emits
-		// one VLESS+XHTTP (SplitHTTP) key on the global LX_VLESS_XHTTP_PATH
-		// and nothing else. xhttpOn is the Transports-page master switch —
-		// it also gates xray user-registration on vless-xhttp-in and needs
-		// LX_VLESS_XHTTP_PATH set — so a host is only served over XHTTP when
-		// that inbound is actually live.
-		if xhttpOn && h.Transport == db.TransportXHTTP {
+		// XHTTP is a first-class per-host pick: "xhttp" emits one VLESS+XHTTP
+		// (SplitHTTP) key, "wsxhttp" emits it alongside the WS key. xhttpOn is
+		// the Transports-page master switch — it also gates xray user-
+		// registration on vless-xhttp-in and needs LX_VLESS_XHTTP_PATH set —
+		// so a host is only served over XHTTP when that inbound is live.
+		if xhttpOn && (h.Transport == db.TransportXHTTP || h.Transport == db.TransportWSXHTTP) {
 			lines = append(lines, vlessXHTTP(cfg, h.Hostname, userUUID, displayName))
 		}
 	}

@@ -60,7 +60,7 @@ func BuildClashMeta(cfg config.Config, hosts []db.CDNHost, reality RealityConfig
 	proxyNames := make([]string, 0, len(hosts)*2)
 	fmt.Fprintf(&b, "proxies:\n")
 	for _, h := range hosts {
-		if h.Transport == db.TransportWS || h.Transport == db.TransportBoth {
+		if h.Transport == db.TransportWS || h.Transport == db.TransportBoth || h.Transport == db.TransportWSXHTTP {
 			pname := fmt.Sprintf("%s | %s", h.Hostname, name)
 			proxyNames = append(proxyNames, pname)
 			writeClashWSProxy(&b, cfg, h.Hostname, pname, userUUID, wsPath)
