@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stacklight — Ship modern apps, faster</title>
+<meta name="description" content="Stacklight is a developer platform for building, deploying, and scaling web applications on a global edge network.">
+<style>
+  :root{
+    --bg:#0b1020; --panel:#11182e; --card:#151d36; --line:#243154;
+    --txt:#e8edf7; --muted:#9aa6c4; --brand:#5b8cff; --brand2:#7c5cff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--txt);background:var(--bg);
+       background-image:radial-gradient(1200px 600px at 80% -10%,rgba(124,92,255,.18),transparent),
+                        radial-gradient(900px 500px at -10% 10%,rgba(91,140,255,.16),transparent);}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  header{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:.2px}
+  .logo .mark{width:28px;height:28px;border-radius:8px;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));display:inline-block}
+  nav a{color:var(--muted);margin-left:26px;font-size:14.5px}
+  nav a:hover{color:var(--txt)}
+  .btn{display:inline-block;padding:11px 18px;border-radius:10px;font-weight:600;font-size:14.5px;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:0;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+  .hero{padding:80px 0 60px;text-align:center}
+  .hero h1{font-size:clamp(34px,6vw,58px);line-height:1.08;margin:0 0 18px;letter-spacing:-.02em}
+  .hero p{font-size:clamp(16px,2.4vw,20px);color:var(--muted);max-width:680px;margin:0 auto 30px}
+  .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .pill{display:inline-block;padding:6px 14px;border:1px solid var(--line);border-radius:999px;
+    color:var(--muted);font-size:13px;margin-bottom:22px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding:30px 0 70px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+  .card h3{margin:6px 0 8px;font-size:18px}
+  .card p{margin:0;color:var(--muted);font-size:14.5px}
+  .ico{width:40px;height:40px;border-radius:10px;background:rgba(91,140,255,.14);
+    display:flex;align-items:center;justify-content:center;font-size:20px}
+  .strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    background:var(--panel);padding:40px 0;text-align:center}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;max-width:820px;margin:0 auto}
+  .stats .n{font-size:30px;font-weight:700}
+  .stats .l{color:var(--muted);font-size:13px}
+  footer{padding:46px 0;color:var(--muted);font-size:14px;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
+  footer a{color:var(--muted)} footer a:hover{color:var(--txt)}
+  @media(max-width:760px){.grid,.stats{grid-template-columns:1fr 1fr} nav{display:none}}
+  @media(max-width:480px){.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span class="mark"></span> Stacklight</div>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#platform">Platform</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#docs">Docs</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <a class="btn" href="#start">Get started</a>
+  </header>
+
+  <section class="hero">
+    <span class="pill">v3.4 — now with regional edge caching</span>
+    <h1>Ship modern apps,<br>faster everywhere.</h1>
+    <p>Stacklight is the developer platform for building, deploying, and scaling
+       web applications on a global edge network — with zero-config builds,
+       instant rollbacks, and observability baked in.</p>
+    <div class="cta">
+      <a class="btn" href="#start">Start free</a>
+      <a class="btn ghost" href="#docs">Read the docs</a>
+    </div>
+  </section>
+</div>
+
+<section class="strip">
+  <div class="wrap stats">
+    <div><div class="n">99.99%</div><div class="l">Uptime SLA</div></div>
+    <div><div class="n">38</div><div class="l">Edge regions</div></div>
+    <div><div class="n">12 ms</div><div class="l">Median latency</div></div>
+    <div><div class="n">5M+</div><div class="l">Deploys / month</div></div>
+  </div>
+</section>
+
+<div class="wrap">
+  <section class="grid" id="features">
+    <div class="card"><div class="ico">⚡</div><h3>Instant deploys</h3>
+      <p>Push to Git and we build, test, and roll out to every region in seconds —
+         with atomic releases and one-click rollback.</p></div>
+    <div class="card"><div class="ico">🔒</div><h3>Secure by default</h3>
+      <p>Automatic TLS, isolated runtimes, and per-environment secrets keep your
+         workloads locked down without extra config.</p></div>
+    <div class="card"><div class="ico">📈</div><h3>Scales automatically</h3>
+      <p>Traffic spikes? Stacklight scales your services up and back down on the
+         edge, so you only pay for what you use.</p></div>
+  </section>
+</div>
+
+<div class="wrap">
+  <footer id="contact">
+    <div>© 2026 Stacklight, Inc. · All rights reserved.</div>
+    <div>
+      <a href="#privacy">Privacy</a> &nbsp;·&nbsp;
+      <a href="#terms">Terms</a> &nbsp;·&nbsp;
+      <a href="#status">Status</a> &nbsp;·&nbsp;
+      <a href="#contact">support@stacklight.io</a>
+    </div>
+  </footer>
+</div>
+</body>
+</html>

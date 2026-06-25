@@ -67,4 +67,9 @@ package version
 //       (reality_enabled); this also stops registering users on the idle
 //       Reality inbound. New installs only; existing nodes keep their tag.
 //       Re-enabling Reality later needs vless-reality-in added back to the tag.
-const Number = "16"
+// v17 — decoy/masquerade website: the nginx catch-all (location /) now serves a
+//       static site from /var/www/lx-site instead of `return 444`, so the domain
+//       looks like a real website to a browser / active prober / CDN scanner.
+//       Proxy locations are all more specific, so only non-proxy paths hit it.
+//       Site = deploy/decoy/index.html; install.sh + update_lightxray.py drop it.
+const Number = "17"

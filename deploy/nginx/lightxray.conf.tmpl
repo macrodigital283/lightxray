@@ -116,6 +116,14 @@ server {
     # makes the include optional: boxes without XHTTP match no file and skip it.
     include /etc/nginx/snippets/lightxray-xhttp*.conf;
 
-    # everything else — generic close (anti-fingerprinting)
-    location / { return 444; }
+    # everything else — masquerade. Serve a static decoy site so the domain
+    # looks like a real website to a browser / active prober / CDN scanner,
+    # instead of the bare `return 444` that fingerprints a hidden service.
+    # The proxy locations above (admin/sub/WS/gRPC/XHTTP) are all more specific,
+    # so this only ever catches non-proxy paths. Files live in /var/www/lx-site
+    # (written by install.sh / update_lightxray.py from deploy/decoy/).
+    location / {
+        root /var/www/lx-site;
+        try_files $uri $uri/ /index.html;
+    }
 }

@@ -122,6 +122,12 @@ cd "$SRC_DIR"
 CGO_ENABLED=0 /usr/local/bin/go build \
     -trimpath -ldflags="-s -w -X main.version=$(git rev-parse --short HEAD)" \
     -o /usr/local/bin/lightxrayd ./cmd/lightxrayd
+
+# decoy masquerade site — served by the nginx catch-all (location /) so the
+# domain looks like a real website instead of returning 444. Refreshed from
+# the repo on every install/update.
+install -d /var/www/lx-site
+install -m 0644 "$SRC_DIR/deploy/decoy/index.html" /var/www/lx-site/index.html
 chmod 755 /usr/local/bin/lightxrayd
 
 # ── 4. Reality keypair (generate once, reuse on re-run) ───────────────

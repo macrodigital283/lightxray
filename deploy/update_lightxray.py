@@ -60,6 +60,10 @@ if ! CGO_ENABLED=0 nice -n 19 /usr/local/bin/go build -trimpath -ldflags="-s -w 
   echo "RESULT|fail|build:$(tail -1 /tmp/lxbuild.err 2>/dev/null | tr '|' ' ' | cut -c1-80)|$SHA||"; exit 0
 fi
 chmod 755 /usr/local/bin/lightxrayd.new && mv -f /usr/local/bin/lightxrayd.new /usr/local/bin/lightxrayd
+# decoy masquerade site (served by the nginx catch-all instead of return 444).
+# Refreshed from the freshly-pulled repo each roll; the template's `location /`
+# serves /var/www/lx-site. No-op-safe if the file is missing.
+[ -f "$SRC/deploy/decoy/index.html" ] && { install -d /var/www/lx-site; install -m 0644 "$SRC/deploy/decoy/index.html" /var/www/lx-site/index.html; }
 for h in applydomain applypaths applytuning applyadmin; do
   [ -f "$SRC/deploy/lightxray-$h" ] && install -m 0755 "$SRC/deploy/lightxray-$h" /usr/local/bin/lightxray-$h
 done
