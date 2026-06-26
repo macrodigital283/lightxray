@@ -72,4 +72,10 @@ package version
 //       looks like a real website to a browser / active prober / CDN scanner.
 //       Proxy locations are all more specific, so only non-proxy paths hit it.
 //       Site = deploy/decoy/index.html; install.sh + update_lightxray.py drop it.
-const Number = "17"
+// v18 — install.sh now PROVISIONS XHTTP (was a manual-only add-on): the xray
+//       template ships a vless-xhttp-in inbound (:10002, network xhttp, mode
+//       auto), install.sh generates LX_VLESS_XHTTP_PATH + writes it to
+//       config.env + the xray config + the nginx snippet. So a fresh node (or a
+//       re-run on an existing one) can toggle XHTTP on with no manual step —
+//       making the Transports-page "install.sh bakes it in" hint actually true.
+const Number = "18"

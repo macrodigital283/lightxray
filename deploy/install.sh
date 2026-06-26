@@ -55,6 +55,7 @@ if [[ "$RESET" != "1" && -f /etc/lightxray/config.env ]]; then
     ADMIN_PROXY_PATH="${ADMIN_PROXY_PATH:-${LX_ADMIN_PROXY_PATH:-}}"
     CLIENT_PROXY_PATH="${CLIENT_PROXY_PATH:-${LX_CLIENT_PROXY_PATH:-}}"
     VLESS_WS_PATH="${VLESS_WS_PATH:-${LX_VLESS_WS_PATH:-}}"
+    VLESS_XHTTP_PATH="${VLESS_XHTTP_PATH:-${LX_VLESS_XHTTP_PATH:-}}"
     VLESS_GRPC_SERVICE="${VLESS_GRPC_SERVICE:-${LX_VLESS_GRPC_SERVICE:-}}"
     REALITY_PUBKEY="${REALITY_PUBKEY:-${LX_REALITY_PUBKEY:-}}"
     REALITY_PRIVKEY="${REALITY_PRIVKEY:-${LX_REALITY_PRIVKEY:-}}"
@@ -70,6 +71,7 @@ CLIENT_PROXY_PATH="${CLIENT_PROXY_PATH:-$(openssl rand -hex 12)}"
 PG_PASSWORD="${PG_PASSWORD:-$(openssl rand -hex 20)}"
 # Hiddify-shape short shared WS token (22 base64url chars).
 VLESS_WS_PATH="${VLESS_WS_PATH:-/$(openssl rand -base64 22 | tr -d '=' | tr '+/' '-_' | head -c 22)}"
+VLESS_XHTTP_PATH="${VLESS_XHTTP_PATH:-/$(openssl rand -base64 22 | tr -d '=' | tr '+/' '-_' | head -c 22)}"
 VLESS_GRPC_SERVICE="${VLESS_GRPC_SERVICE:-GunService}"
 REALITY_SHORT_ID="${REALITY_SHORT_ID:-$(openssl rand -hex 8)}"
 
@@ -163,6 +165,7 @@ LX_CLIENT_PROXY_PATH=${CLIENT_PROXY_PATH}
 LX_PUBLIC_HOST=${DOMAIN}
 LX_VLESS_SNI=${DOMAIN}
 LX_VLESS_WS_PATH=${VLESS_WS_PATH}
+LX_VLESS_XHTTP_PATH=${VLESS_XHTTP_PATH}
 LX_VLESS_GRPC_SERVICE=${VLESS_GRPC_SERVICE}
 LX_XRAY_GRPC_ADDR=127.0.0.1:10085
 LX_XRAY_INBOUND_TAG=vless-ws-in,vless-xhttp-in
@@ -178,6 +181,7 @@ chown root:lightxray /etc/lightxray/config.env
 # ── 7. xray config (loopback inbounds; Reality on 127.0.0.1:7443) ─────
 log "writing /usr/local/etc/xray/config.json"
 sed -e "s|__LX_VLESS_WS_PATH__|${VLESS_WS_PATH}|g" \
+    -e "s|__LX_VLESS_XHTTP_PATH__|${VLESS_XHTTP_PATH}|g" \
     -e "s|__LX_VLESS_GRPC_SERVICE__|${VLESS_GRPC_SERVICE}|g" \
     -e "s|__LX_REALITY_TARGET__|${REALITY_TARGET}|g" \
     -e "s|__LX_REALITY_PRIVKEY__|${REALITY_PRIVKEY}|g" \
@@ -224,6 +228,26 @@ sed -e "s|__LX_DOMAIN__|${DOMAIN}|g" \
 sed -e "s|__LX_REALITY_TARGET__|${REALITY_TARGET}|g" \
     "$SRC_DIR/deploy/nginx/stream-sni-router.conf.tmpl" \
     > /etc/nginx/stream-conf.d/sni-router.conf
+
+# XHTTP data-plane route — its location lives in a snippet the http template
+# glob-includes; write it from the generated path so a fresh node serves XHTTP
+# with no manual step (matches what update_lightxray.py rewrites on each roll).
+mkdir -p /etc/nginx/snippets
+cat > /etc/nginx/snippets/lightxray-xhttp.conf <<XSNIP
+location ${VLESS_XHTTP_PATH} {
+    proxy_pass http://127.0.0.1:10002;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    client_max_body_size 0;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+XSNIP
 
 # CPU priority: nginx is in the WS data path, so give it the same high cgroup
 # weight as xray (the xray + lightxrayd units carry their own CPUWeight). A
