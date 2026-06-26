@@ -109,8 +109,21 @@ mv "${NGINX_HTTP}.new" "$NGINX_HTTP"
 
 # ── 3. regenerate xray config + DB token (only when WS changed) ───────────
 if [[ "$CHANGED_WS" == "1" ]]; then
+    # XHTTP path may be unset on nodes installed before XHTTP existed. Generate +
+    # persist one (install.sh shape) so the regen below substitutes a real path
+    # instead of baking the literal __LX_VLESS_XHTTP_PATH__ placeholder into the
+    # data plane (which would leave xray's vless-xhttp-in inbound broken).
+    if [[ -z "${LX_VLESS_XHTTP_PATH:-}" ]]; then
+        LX_VLESS_XHTTP_PATH="/$(openssl rand -base64 22 | tr -d '=' | tr '+/' '-_' | head -c 22)"
+        if grep -q '^LX_VLESS_XHTTP_PATH=' "$CONF"; then
+            sed -i "s|^LX_VLESS_XHTTP_PATH=.*|LX_VLESS_XHTTP_PATH=${LX_VLESS_XHTTP_PATH}|" "$CONF"
+        else
+            echo "LX_VLESS_XHTTP_PATH=${LX_VLESS_XHTTP_PATH}" >> "$CONF"
+        fi
+    fi
     echo "==> regenerating ${XRAY_JSON}"
     sed -e "s|__LX_VLESS_WS_PATH__|${LX_VLESS_WS_PATH}|g" \
+        -e "s|__LX_VLESS_XHTTP_PATH__|${LX_VLESS_XHTTP_PATH}|g" \
         -e "s|__LX_VLESS_GRPC_SERVICE__|${LX_VLESS_GRPC_SERVICE}|g" \
         -e "s|__LX_REALITY_TARGET__|${LX_REALITY_TARGET}|g" \
         -e "s|__LX_REALITY_PRIVKEY__|${LX_REALITY_PRIVKEY}|g" \
