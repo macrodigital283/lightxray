@@ -61,6 +61,11 @@ if [[ "$RESET" != "1" && -f /etc/lightxray/config.env ]]; then
     REALITY_PRIVKEY="${REALITY_PRIVKEY:-${LX_REALITY_PRIVKEY:-}}"
     REALITY_SHORT_ID="${REALITY_SHORT_ID:-${LX_REALITY_SHORT_ID:-}}"
     REALITY_TARGET="${LX_REALITY_TARGET:-$REALITY_TARGET}"
+    # Management domain → LX_PUBLIC_HOST/LX_VLESS_SNI (+ the LE cert). Preserve it
+    # so a re-run WITHOUT an explicit DOMAIN keeps the node's domain instead of
+    # blanking the subscription-URL host. (A v18 bare re-install wiped this across
+    # the fleet — sub URLs rendered as https:///… until restored from the cert.)
+    DOMAIN="${DOMAIN:-${LX_PUBLIC_HOST:-${LX_VLESS_SNI:-}}}"
     if [[ -n "${LX_DATABASE_URL:-}" ]]; then
         PG_PASSWORD="${PG_PASSWORD:-$(printf '%s' "$LX_DATABASE_URL" | sed -E 's|.*lightxray:([^@]+)@.*|\1|')}"
     fi

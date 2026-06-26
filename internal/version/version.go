@@ -78,4 +78,11 @@ package version
 //       config.env + the xray config + the nginx snippet. So a fresh node (or a
 //       re-run on an existing one) can toggle XHTTP on with no manual step —
 //       making the Transports-page "install.sh bakes it in" hint actually true.
-const Number = "18"
+// v19 — install.sh now PRESERVES the management domain on a re-run: the
+//       idempotency block restores DOMAIN from the existing config.env
+//       (LX_PUBLIC_HOST/LX_VLESS_SNI) when it isn't passed explicitly. A v18
+//       bare re-install (to add the XHTTP inbound) had blanked LX_PUBLIC_HOST
+//       fleet-wide, so dashboard subscription URLs rendered as "https:///…"
+//       (empty host) even though the LE cert + DNS were intact. Deploy-tooling
+//       fix only — no daemon behaviour change.
+const Number = "19"
