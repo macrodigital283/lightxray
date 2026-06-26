@@ -155,6 +155,12 @@ sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='lightxray'"
     || sudo -u postgres createdb -O lightxray lightxray
 if [[ "$RESET" == "1" ]]; then
     log "RESET=1 — wiping lightxray DB"
+    # A running lightxrayd (+ its reconciler) holds open sessions on the DB, so
+    # DROP DATABASE is refused ("database is being accessed by other users").
+    # Stop the daemon and terminate any lingering backends before the drop —
+    # otherwise a RESET re-install of an already-live node fails here.
+    systemctl stop lightxrayd 2>/dev/null || true
+    sudo -u postgres psql -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='lightxray' AND pid <> pg_backend_pid()" >/dev/null 2>&1 || true
     sudo -u postgres psql -c "DROP DATABASE lightxray"
     sudo -u postgres createdb -O lightxray lightxray
 fi

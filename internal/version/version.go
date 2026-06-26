@@ -85,4 +85,9 @@ package version
 //       fleet-wide, so dashboard subscription URLs rendered as "https:///…"
 //       (empty host) even though the LE cert + DNS were intact. Deploy-tooling
 //       fix only — no daemon behaviour change.
-const Number = "19"
+// v20 — install.sh RESET=1 now stops lightxrayd + terminates lingering DB
+//       backends before DROP DATABASE. A RESET re-install of an already-LIVE
+//       node failed at "wiping lightxray DB" because the running daemon held an
+//       open session ("database is being accessed by other users"); fresh nodes
+//       were unaffected (nothing connected yet). Deploy-tooling fix only.
+const Number = "20"
