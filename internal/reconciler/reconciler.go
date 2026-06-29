@@ -130,23 +130,24 @@ func (r *Reconciler) tick(ctx context.Context) {
 		updated++
 	}
 
-	// Enforce quota + expiry. One atomic UPDATE flips enable=FALSE for every
-	// enabled user who has hit their data cap or passed expiry; we then evict
-	// each from xray so a disabled user can't open new connections. This runs
-	// every tick regardless of traffic, so idle-but-expired users are caught
-	// too — not only those who moved bytes this tick. (An already-established
-	// connection drains until it closes; the eviction blocks RE-connection,
-	// which is the Hiddify-equivalent behaviour.)
-	if disabled, derr := r.store.DisableOverLimitOrExpired(tctx); derr != nil {
-		slog.Warn("reconciler: enforce limits failed", "err", derr)
+	// Enforce quota + expiry + disable-purge. One atomic DELETE removes every
+	// user who is over data cap, past expiry, OR already disabled (enable=FALSE),
+	// and we then evict each from xray. Operator policy: a disabled key is
+	// AUTO-DELETED at lightxray (no lingering disabled rows), so pool-disabled
+	// keys (PATCH enable=false) get purged here too. Runs every tick regardless
+	// of traffic, so idle-but-expired users are caught — not only those who moved
+	// bytes this tick. (An already-established connection drains until it closes;
+	// removal blocks RE-connection, the Hiddify-equivalent behaviour.)
+	if purged, derr := r.store.DeleteDisabledOverLimitOrExpired(tctx); derr != nil {
+		slog.Warn("reconciler: enforce/purge failed", "err", derr)
 	} else {
-		for _, uid := range disabled {
+		for _, uid := range purged {
 			if err := r.xc.RemoveUser(tctx, uid); err != nil {
 				slog.Warn("reconciler: evict from xray failed", "uuid", uid, "err", err)
 			}
-			slog.Info("reconciler: disabled user (over data cap / expired)", "uuid", uid)
+			slog.Info("reconciler: deleted disabled user (data cap / expired / disabled)", "uuid", uid)
 		}
-		enforced = len(disabled)
+		enforced = len(purged)
 	}
 
 	slog.Info("reconciler tick",

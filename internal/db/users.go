@@ -358,25 +358,25 @@ func (s *Store) TouchLastOnline(ctx context.Context, id uuid.UUID, at time.Time)
 	return err
 }
 
-// DisableOverLimitOrExpired flips enable=FALSE for every currently-enabled
-// user who has hit their data cap (usage_bytes >= a POSITIVE usage_limit_bytes)
-// or passed expiry (a set start_date + a POSITIVE package_days that has reached
-// today: start_date + package_days <= CURRENT_DATE, so a 7-day user gets exactly
-// 7 days and is disabled ON the expiry date — Hiddify duration semantics), and
-// returns their uuids so the caller can evict them from xray. One
-// atomic statement — this is the quota/expiry enforcement the reconciler runs
-// every tick. A 0 usage_limit_bytes means unlimited; package_days 0 means no
-// expiry; a NULL start_date means the clock hasn't started (never connected),
-// so neither can trip those rows.
-func (s *Store) DisableOverLimitOrExpired(ctx context.Context) ([]uuid.UUID, error) {
+// DeleteDisabledOverLimitOrExpired DELETES (not just disables) every user who is
+// already disabled (enable=FALSE) OR has hit their data cap (usage_bytes >= a
+// POSITIVE usage_limit_bytes) OR passed expiry (a set start_date + a POSITIVE
+// package_days that reached today: start_date + package_days <= CURRENT_DATE, so
+// a 7-day user gets exactly 7 days and is removed ON the expiry date — Hiddify
+// duration semantics), and returns their uuids so the caller can evict them from
+// xray. Operator policy: a disabled key is AUTO-DELETED at lightxray — no
+// lingering enable=FALSE rows — so pool-disabled keys (PATCH enable=false) get
+// purged here too, alongside natural quota/expiry. One atomic statement, run
+// every reconciler tick. usage_limit_bytes 0 = unlimited; package_days 0 = no
+// expiry; NULL start_date = clock not started, so those two clauses can't trip
+// such a row (but enable=FALSE still purges a manually/pool-disabled one).
+func (s *Store) DeleteDisabledOverLimitOrExpired(ctx context.Context) ([]uuid.UUID, error) {
 	rows, err := s.Pool.Query(ctx, `
-		UPDATE users SET enable = FALSE, updated_at = NOW()
-		WHERE enable = TRUE
-		  AND (
-		        (usage_limit_bytes > 0 AND usage_bytes >= usage_limit_bytes)
-		     OR (package_days > 0 AND start_date IS NOT NULL
-		         AND start_date + package_days <= CURRENT_DATE)
-		      )
+		DELETE FROM users
+		WHERE enable = FALSE
+		   OR (usage_limit_bytes > 0 AND usage_bytes >= usage_limit_bytes)
+		   OR (package_days > 0 AND start_date IS NOT NULL
+		       AND start_date + package_days <= CURRENT_DATE)
 		RETURNING uuid`)
 	if err != nil {
 		return nil, err

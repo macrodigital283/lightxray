@@ -102,4 +102,14 @@ package version
 //       in place (PATCH usage_limit_GB + package_days + start_date) without
 //       rotating the key. PatchUserInput + the patch builder already supported
 //       start_date; this exposes it on the HTTP body. Additive + safe.
-const Number = "22"
+// v23 — Disabled keys are AUTO-DELETED (not just disabled). The reconciler's
+//       enforcement (every tick) now runs a DELETE instead of UPDATE enable=FALSE,
+//       and widens the match to ALSO purge rows already at enable=FALSE — so an
+//       over-cap, expired, OR pool-disabled (PATCH enable=false) key is removed
+//       from the DB + evicted from xray within one tick, leaving no lingering
+//       "disabled" rows on the node. Behaviour change (was: keep a disabled row).
+//       Re-enable of a purged key happens via re-provision on the next /sub
+//       fetch (the pool's model), not via PATCH. Node-only; pool unchanged
+//       (pool device rows for purged keys become not_found until the pool's own
+//       enforce/Delete-not-found cleans them).
+const Number = "23"
