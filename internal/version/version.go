@@ -90,4 +90,11 @@ package version
 //       node failed at "wiping lightxray DB" because the running daemon held an
 //       open session ("database is being accessed by other users"); fresh nodes
 //       were unaffected (nothing connected yet). Deploy-tooling fix only.
-const Number = "20"
+// v21 — POST /user/ now honors an optional `start_date` (YYYY-MM-DD) on create.
+//       Previously create ignored it and left start_date null ("starts on first
+//       connect"), so a freshly-created key showed no expiry date until the
+//       customer first connected. The pool now sends start_date so expiry
+//       (start_date + package_days) is visible immediately. Additive + safe:
+//       omitting start_date keeps the old first-connect behavior. (Also folds in
+//       the prior deploy commit: XHTTP data-plane retrofit + applypaths fix.)
+const Number = "21"

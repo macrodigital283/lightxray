@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -160,6 +161,10 @@ type createUserBody struct {
 	Comment      *string  `json:"comment"`
 	Mode         *string  `json:"mode"`
 	Lang         *string  `json:"lang"`
+	// StartDate (YYYY-MM-DD) anchors the expiry clock at creation instead of
+	// first connect, so the key shows expiry = start_date + package_days right
+	// away. The pool sends this; real Hiddify leaves it null until first use.
+	StartDate *string `json:"start_date"`
 }
 
 // adminCreateUser — POST /api/v2/admin/user/
@@ -200,6 +205,16 @@ func (d Deps) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in.UUID = &id
+	}
+
+	// Optional caller-supplied start_date (YYYY-MM-DD). The pool sends this so a
+	// freshly-created key shows its expiry (start_date + package_days) at once,
+	// rather than only after the customer's first connect. A malformed value is
+	// ignored (start_date left null = the default "starts on first connect").
+	if body.StartDate != nil && *body.StartDate != "" {
+		if t, perr := time.Parse("2006-01-02", *body.StartDate); perr == nil {
+			in.StartDate = &t
+		}
 	}
 
 	ctx, cancel := reqCtx(r)

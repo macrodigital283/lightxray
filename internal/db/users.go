@@ -97,6 +97,10 @@ type CreateUserInput struct {
 	Lang            string
 	Enable          bool
 	AddedByUUID     uuid.UUID
+	// StartDate anchors the expiry clock (start_date + package_days) at creation.
+	// nil = the default Hiddify behavior (starts on first connect). The pool
+	// sets it so a new key shows its expiry date immediately.
+	StartDate *time.Time
 }
 
 // CreateUser inserts a new row and returns (user, created, err). When
@@ -120,12 +124,12 @@ func (s *Store) CreateUser(ctx context.Context, in CreateUserInput) (User, bool,
 	}
 	row := s.Pool.QueryRow(ctx, `
 		INSERT INTO users (uuid, name, comment, usage_limit_bytes,
-		                   package_days, mode, lang, enable, added_by_uuid)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		                   package_days, mode, lang, enable, added_by_uuid, start_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (uuid) DO NOTHING
 		RETURNING `+userCols,
 		id, in.Name, in.Comment, in.UsageLimitBytes,
-		in.PackageDays, mode, lang, in.Enable, in.AddedByUUID,
+		in.PackageDays, mode, lang, in.Enable, in.AddedByUUID, in.StartDate,
 	)
 	u, err := scanUser(row)
 	if errors.Is(err, pgx.ErrNoRows) {
