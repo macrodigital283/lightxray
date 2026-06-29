@@ -97,4 +97,9 @@ package version
 //       (start_date + package_days) is visible immediately. Additive + safe:
 //       omitting start_date keeps the old first-connect behavior. (Also folds in
 //       the prior deploy commit: XHTTP data-plane retrofit + applypaths fix.)
-const Number = "21"
+// v22 — PATCH /user/ now also honors start_date (it was create-only in v21).
+//       Lets the pool's "re-sync" button re-anchor an existing key's expiry date
+//       in place (PATCH usage_limit_GB + package_days + start_date) without
+//       rotating the key. PatchUserInput + the patch builder already supported
+//       start_date; this exposes it on the HTTP body. Additive + safe.
+const Number = "22"

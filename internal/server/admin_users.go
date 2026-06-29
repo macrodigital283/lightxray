@@ -256,6 +256,10 @@ type patchUserBody struct {
 	Enable       *bool    `json:"enable"`
 	Mode         *string  `json:"mode"`
 	Lang         *string  `json:"lang"`
+	// StartDate (YYYY-MM-DD) re-anchors the expiry clock (expiry =
+	// start_date + package_days). The pool's "re-sync" sends it to push the
+	// current expiry date onto an existing key in place.
+	StartDate *string `json:"start_date"`
 }
 
 // adminPatchUser — PATCH /api/v2/admin/user/{uuid}/
@@ -280,6 +284,13 @@ func (d Deps) adminPatchUser(w http.ResponseWriter, r *http.Request) {
 	if body.UsageLimitGB != nil {
 		v := util.GBToBytes(*body.UsageLimitGB)
 		patch.UsageLimitBytes = &v
+	}
+	// Re-anchor the expiry date (re-sync). PatchUserInput.StartDate + the patch
+	// builder already handle the DATE column; we just accept it on the wire now.
+	if body.StartDate != nil && *body.StartDate != "" {
+		if t, perr := time.Parse("2006-01-02", *body.StartDate); perr == nil {
+			patch.StartDate = &t
+		}
 	}
 
 	ctx, cancel := reqCtx(r)
