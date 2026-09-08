@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -69,6 +70,22 @@ func (u *UI) logout(w http.ResponseWriter, r *http.Request) {
 // as "online" — matches the user table's "online" pill (see funcMap "ago").
 const onlineWindow = 2 * time.Minute
 
+// trafficWindowDays is the trailing window behind the "Used traffic" card.
+const trafficWindowDays = 30
+
+// trafficNote explains a partial window: the traffic_daily table only starts
+// when v24 first ran on the node, so until 30 days have passed the card says
+// how much history it actually covers instead of implying a full month.
+func trafficNote(w db.TrafficWindow) string {
+	if w.FirstDay == nil {
+		return "no data yet — counting starts now"
+	}
+	if !w.Partial() {
+		return ""
+	}
+	return fmt.Sprintf("since %s · %d of %d days", w.FirstDay.Format("2 Jan"), w.Covered, w.Days)
+}
+
 func (u *UI) usersList(w http.ResponseWriter, r *http.Request) {
 	users, err := u.store.ListUsers(r.Context())
 	if err != nil {
@@ -80,11 +97,19 @@ func (u *UI) usersList(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Warn("ui users online count", "err", err)
 	}
+	// v24: server-wide "Used traffic (last 30 days)" from traffic_daily. A
+	// failure just leaves the card at zero — the page must still render.
+	traffic, err := u.store.TrafficLastDays(r.Context(), trafficWindowDays)
+	if err != nil {
+		slog.Warn("ui users traffic window", "err", err)
+	}
 	u.render(w, "users_list", map[string]any{
-		"Users":  users,
-		"Count":  len(users),
-		"Online": online,
-		"Stats":  sysstat.Sample("/"),
+		"Users":       users,
+		"Count":       len(users),
+		"Online":      online,
+		"Stats":       sysstat.Sample("/"),
+		"Traffic":     traffic,
+		"TrafficNote": trafficNote(traffic),
 	})
 }
 

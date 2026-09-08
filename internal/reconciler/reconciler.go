@@ -65,9 +65,9 @@ func (r *Reconciler) tick(ctx context.Context) {
 	}
 
 	var (
-		updated   int
-		online    int
-		enforced  int
+		updated        int
+		online         int
+		enforced       int
 		totalDeltaUp   int64
 		totalDeltaDown int64
 	)
@@ -128,6 +128,16 @@ func (r *Reconciler) tick(ctx context.Context) {
 			slog.Warn("reconciler: UpsertCursor", "uuid", uid, "err", err)
 		}
 		updated++
+	}
+
+	// v24: fold this tick's server-wide deltas into today's traffic_daily row —
+	// the same deltas that feed usage_bytes, so the dashboard's "last 30 days"
+	// figure and the per-user counters always reconcile. Ghost UUIDs were
+	// skipped above, so only real users count.
+	if totalDeltaUp+totalDeltaDown > 0 {
+		if err := r.store.AddDailyTraffic(tctx, now, totalDeltaUp, totalDeltaDown); err != nil {
+			slog.Warn("reconciler: AddDailyTraffic", "err", err)
+		}
 	}
 
 	// Enforce quota + expiry + disable-purge. One atomic DELETE removes every

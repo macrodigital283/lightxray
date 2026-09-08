@@ -112,4 +112,13 @@ package version
 //       fetch (the pool's model), not via PATCH. Node-only; pool unchanged
 //       (pool device rows for purged keys become not_found until the pool's own
 //       enforce/Delete-not-found cleans them).
-const Number = "23"
+// v24 — "Used traffic (last 30 days)" card on the Users page. New traffic_daily
+//       table (one row per UTC day) that the reconciler feeds with each tick's
+//       server-wide up/down byte deltas — the same deltas that bump usage_bytes,
+//       so the card and the per-user counters always agree (VPN payload only,
+//       ghost UUIDs excluded, xray restarts handled by the existing cursor
+//       logic). The card sums the trailing 30 days incl. today and shows
+//       "since <date> · N of 30 days" while the node has less history than
+//       that (counting starts when v24 first runs; no backfill). Additive +
+//       safe: CREATE TABLE IF NOT EXISTS, no API change, xray untouched.
+const Number = "24"

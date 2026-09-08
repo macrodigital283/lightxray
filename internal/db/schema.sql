@@ -82,3 +82,16 @@ CREATE TABLE IF NOT EXISTS stats_cursor (
     last_downlink  BIGINT      NOT NULL DEFAULT 0,
     last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- v24: server-wide traffic history, one row per UTC day — the sum of every
+-- user's byte deltas the reconciler observed that day (the SAME deltas that
+-- feed users.usage_bytes, so it counts VPN payload only, not host overhead,
+-- and always reconciles with the per-user counters). Powers the dashboard's
+-- "Used traffic (last 30 days)" card. One tiny row per day, never pruned.
+-- History starts the day this version first runs on a node — no backfill.
+CREATE TABLE IF NOT EXISTS traffic_daily (
+    day         DATE        PRIMARY KEY,
+    up_bytes    BIGINT      NOT NULL DEFAULT 0,
+    down_bytes  BIGINT      NOT NULL DEFAULT 0,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

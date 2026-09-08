@@ -26,6 +26,11 @@
         <span class="stat-label">Network</span>
         <span class="stat-value">↓ {{printf "%.1f" .Stats.NetDownMbps}} &nbsp; ↑ {{printf "%.1f" .Stats.NetUpMbps}} <small>Mbps</small></span>
       </div>
+      <div class="stat" title="VPN payload moved by this server's users in the last 30 days (UTC), from the same xray counters that feed each user's Usage. Starts counting when v24 first ran here.">
+        <span class="stat-label">Used traffic <small>last 30 days</small></span>
+        <span class="stat-value">{{gb .Traffic.TotalBytes}} <small>↓ {{gb .Traffic.DownBytes}} &nbsp; ↑ {{gb .Traffic.UpBytes}}</small></span>
+        {{if .TrafficNote}}<span class="stat-note">{{.TrafficNote}}</span>{{end}}
+      </div>
     </div>
 
     {{if not .Users}}

@@ -313,6 +313,7 @@ body.login-page {
 }
 .stat-value { font-size: 18px; font-weight: 600; }
 .stat-value small { font-size: 11px; color: var(--dim); font-weight: 400; }
+.stat-note { display: block; font-size: 11px; color: var(--dim); margin-top: 4px; }
 .dot-online {
   display: inline-block;
   width: 8px; height: 8px;
