@@ -29,6 +29,17 @@ type statusResponse struct {
 			BytesSent            int64   `json:"bytes_sent"`
 			NetSentCumulativeGB  float64 `json:"net_sent_cumulative_GB"`
 			NetTotalCumulativeGB float64 `json:"net_total_cumulative_GB"`
+			// v25: VPN payload moved by this node's users in the trailing 30
+			// UTC days (traffic_daily, same deltas that feed usage_bytes).
+			// Extra fields — Hiddify never had them; the pool reads them from
+			// the stored server_status JSON. traffic_30d_days < 30 means the
+			// node has less history than the window (counting started on
+			// traffic_30d_since); 0 = no data yet.
+			Traffic30dBytes     int64  `json:"traffic_30d_bytes"`
+			Traffic30dUpBytes   int64  `json:"traffic_30d_up_bytes"`
+			Traffic30dDownBytes int64  `json:"traffic_30d_down_bytes"`
+			Traffic30dDays      int    `json:"traffic_30d_days"`
+			Traffic30dSince     string `json:"traffic_30d_since"`
 		} `json:"system"`
 		Top5 struct {
 			CPU    []any `json:"cpu"`
@@ -68,6 +79,18 @@ func (d Deps) adminServerStatus(w http.ResponseWriter, r *http.Request) {
 		sys.TotalConnections = n
 	} else {
 		slog.Warn("server_status count", "err", err)
+	}
+	// v25: trailing-30-day traffic for the pool's per-server / per-pool figure.
+	if w, err := d.store.TrafficLastDays(ctx, 30); err == nil {
+		sys.Traffic30dBytes = w.TotalBytes()
+		sys.Traffic30dUpBytes = w.UpBytes
+		sys.Traffic30dDownBytes = w.DownBytes
+		sys.Traffic30dDays = w.Covered
+		if w.FirstDay != nil {
+			sys.Traffic30dSince = w.FirstDay.Format("2006-01-02")
+		}
+	} else {
+		slog.Warn("server_status traffic window", "err", err)
 	}
 
 	resp.Stats.Top5.CPU = []any{}
